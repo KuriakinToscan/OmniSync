@@ -1,6 +1,6 @@
-# 📖 Manual do Usuário — OmniSync
+# Manual do Usuário — OmniSync
 
-Bem-vindo ao manual oficial do **OmniSync**, o sincronizador visual de arquivos para **Windows e Linux** com proteção automática de arquivos órfãos (`lixo/`) e histórico de versões substituídas (`old/`).
+Manual do **OmniSync**, sincronizador visual de arquivos para **Windows e Linux** com proteção automática de arquivos órfãos (`lixo/`) e histórico de versões substituídas (`old/`).
 
 ---
 
@@ -11,63 +11,66 @@ Bem-vindo ao manual oficial do **OmniSync**, o sincronizador visual de arquivos 
 4. [Entendendo as Categorias de Arquivos](#4-entendendo-as-categorias-de-arquivos)
 5. [Resolvendo Conflitos de Arquivos](#5-resolvendo-conflitos-de-arquivos)
 6. [Restaurando Arquivos das Pastas `lixo/` e `old/`](#6-restaurando-arquivos-das-pastas-lixo-e-old)
-7. [Perguntas Frequentes e Solução de Problemas](#7-perguntas-frequentes-e-solução-de-problemas)
+7. [Garantias de Segurança](#7-garantias-de-segurança)
+8. [Perguntas Frequentes e Solução de Problemas](#8-perguntas-frequentes-e-solução-de-problemas)
 
 ---
 
 ## 1. Visão Geral da Interface
 
-A janela principal do OmniSync é dividida em 5 áreas principais:
+A janela principal é dividida em seis áreas:
 
-1. **Painel de Diretórios e Ações (Topo)**:
-   - **📁 Diretório de Origem**: Pasta que contém os arquivos originais que você deseja espelhar.
-   - **🖧 Diretório de Destino (Local ou NAS)**: Unidade ou pasta onde a cópia sincronizada será mantida.
-   - **Criar/usar subpasta com nome da origem** *(Marcado por padrão)*: Garante que, ao escolher uma pasta como `E:\Fotos` na Origem e selecionar um disco como `G:\` no Destino, a sincronização ocorra dentro de `G:\Fotos`, sem afetar nenhuma outra pasta existente em `G:\`.
-   - **Verificação SHA-256**: Quando ativada, calcula a assinatura criptográfica de arquivos que possuem o mesmo tamanho para garantir que cada byte do conteúdo seja idêntico.
-2. **Cartões de Resumo (Indicadores)**:
-   - Exibe instantaneamente a contagem de arquivos **Novos a Copiar** (e o volume total em MB/GB), **Idênticos (Ignorados)**, **Conflitos** e **Órfãos (Para o Lixo)**.
-3. **Abas de Inspeção**:
-   - **📋 Prévia de Arquivos**: Tabela interativa com filtros rápidos (`Todos`, `Novos`, `Conflitos`, `Órfãos (Lixo)`, `Idênticos`).
-   - **📜 Registro de Operações (Log)**: Histórico cronológico detalhado de todas as ações executadas.
-4. **Painel de Progresso em Tempo Real**:
-   - Mostra o arquivo em processamento, quantidade de arquivos concluídos, velocidade atual de cópia (`MB/s`) e tempo restante estimado (`ETA`).
-5. **Barra Inferior de Utilitários**:
-   - **↩ Restaurar de lixo/**: Devolve automaticamente arquivos movidos para a pasta `lixo/` aos seus locais originais.
-   - **Abrir destino/lixo/ ↗** e **Abrir destino/old/ ↗**: Abre diretamente as pastas de segurança no Windows Explorer ou gerenciador de arquivos do Linux.
+1. **Pastas, opções e ações (topo)**
+   - **Origem**: pasta com os arquivos originais.
+   - **Destino (local ou NAS)**: unidade ou pasta onde a cópia é mantida.
+   - **Subpasta com nome da origem** *(marcado por padrão)*: com Origem `E:\Fotos` e Destino `G:\`, a sincronização ocorre em `G:\Fotos`, sem afetar outras pastas de `G:\`.
+   - **Verificar conteúdo (SHA-256)**: arquivos de mesmo tamanho são comparados pelo conteúdo, e não pela data. Mais lento, mais seguro.
+   - **Tolerar 1 h (horário de verão)**: considera iguais arquivos cuja data difere exatamente 1 hora. Útil com pendrives e HDs em FAT/exFAT, que gravam hora local.
+   - **Ignorar**: padrões separados por ponto e vírgula, aplicados ao nome de arquivos e pastas nos dois lados (`*` e `?` como curingas). Padrão: `Thumbs.db; desktop.ini; .DS_Store; ~$*`.
+   - **Analisar** (F5), **Sincronizar** (Ctrl+Enter) e **Cancelar** (Esc).
+2. **Avisos da análise**: faixa amarela exibida quando algo exige atenção (pastas ilegíveis, nomes reservados, arquivos que diferem só por maiúsculas).
+3. **Cartões de resumo**: Novos (com volume), Conflitos, Órfãos, Idênticos e Erros. Clicar em um cartão filtra a tabela.
+4. **Abas**
+   - **Prévia**: tabela com filtros, busca por caminho, coluna **Decisão** para conflitos e menu **Decidir conflitos**.
+   - **Registro**: log em tempo real, colorido por severidade (avisos em âmbar, erros em vermelho).
+5. **Progresso**: aparece só durante operações, com arquivo atual, contagem, velocidade e tempo restante.
+6. **Barra inferior**: mensagem de estado, **Exportar CSV**, **Restaurar de lixo/** e atalhos para abrir `lixo/` e `old/`. O botão **Logs**, no canto superior direito, abre a pasta com o histórico completo.
+
+As escolhas de pastas e opções são lembradas entre sessões.
 
 ---
 
 ## 2. Passo a Passo de Uso
 
-### Etapa 1: Selecionar Origem e Destino
-1. Clique em **Procurar...** no campo **Diretório de Origem** e escolha a pasta desejada (ou cole o caminho diretamente na caixa de texto).
-2. Clique em **Procurar...** no campo **Diretório de Destino** e selecione a unidade ou pasta de destino.
-   - *Observação*: Com a opção **"Criar/usar subpasta com nome da origem"** marcada, o OmniSync preencherá automaticamente o nome da pasta de origem ao final do caminho de destino (ex.: `G:\MinhaPasta`).
+### Etapa 1: selecionar Origem e Destino
+1. Clique em **Procurar...** em **Origem** (ou cole o caminho).
+2. Clique em **Procurar...** em **Destino**. Com **Subpasta com nome da origem** marcada, o nome da pasta de origem é acrescentado ao destino (ex.: `G:\MinhaPasta`).
 
-### Etapa 2: Analisar Diferenças (Dry-Run)
-1. Clique no botão **🔍 1. Analisar Diferenças (Dry-Run)**.
-2. O aplicativo fará uma leitura rápida das duas pastas **sem alterar, mover ou apagar nenhum arquivo**.
-3. Confira os números nos cartões de resumo e use os botões de filtro (`Novos`, `Conflitos`, `Órfãos (Lixo)`) para revisar o que será feito.
+### Etapa 2: analisar (Dry-Run)
+1. Clique em **Analisar** (ou F5). Nenhum arquivo é alterado.
+2. Leia a faixa de avisos, se houver, e confira os cartões.
+3. Use os filtros e a busca para revisar o plano. Para conflitos, defina a decisão na coluna **Decisão** ou pelo menu **Decidir conflitos**.
 
-### Etapa 3: Iniciar Sincronização
-1. Após revisar a prévia, clique em **▶ 2. Iniciar Sincronização**.
-2. Acompanhe o progresso na barra inferior. Caso precise interromper a operação a qualquer momento, clique no botão **✕ Cancelar**.
+Se você alterar pastas ou opções depois da análise, o plano é descartado e uma nova análise é exigida.
+
+### Etapa 3: sincronizar
+1. Clique em **Sincronizar** (ou Ctrl+Enter).
+2. Revise a janela **Revise antes de sincronizar**: quantos arquivos serão copiados, substituídos, ignorados e movidos para `lixo/`.
+3. Se a operação for mover uma parte grande do destino para `lixo/` (20% ou mais dos arquivos, com mínimo de 10, ou 1.000 arquivos ou mais), a janela exibe um alerta vermelho e só libera o botão depois que você marcar a confirmação. Isso costuma indicar destino escolhido errado.
+4. Ao final, a barra inferior informa o balanço (copiados, substituídos, movidos, ignorados, pulados e falhas). Itens com falha aparecem no filtro **Erros** e podem ser reprocessados clicando de novo em **Sincronizar**.
+5. **Exportar CSV** gera um relatório da análise/resultado (UTF-8, separado por ponto e vírgula, abre direto no Excel).
 
 ---
 
 ## 3. Sincronizando com NAS / Rede (SMB / NFS)
 
-O OmniSync suporta unidades mapeadas e caminhos de rede diretos:
-
-- **No Windows**:
-  - Você pode usar uma letra de unidade mapeada (ex.: `Z:\Backups`) ou digitar diretamente o caminho UNC do servidor e pasta compartilhada no campo de texto:
-    ```text
-    \\192.168.1.100\compartilhamento\meus_arquivos
-    \\meu-nas\arquivos
-    ```
-  - **Importante**: Ao usar o botão *Procurar...* na seção "Rede" do Windows Explorer, entre dentro do servidor NAS e selecione uma **pasta compartilhada específica** (não selecione apenas o ícone raiz "Rede").
-- **No Linux**:
-  - Utilize o ponto de montagem local do compartilhamento CIFS/SMB ou NFS (ex.: `/mnt/nas/backup` ou `/run/user/1000/gvfs/smb-share:...`).
+- **Windows**: use uma unidade mapeada (ex.: `Z:\Backups`) ou digite o caminho UNC:
+  ```text
+  \\192.168.1.100\compartilhamento\meus_arquivos
+  \\meu-nas\arquivos
+  ```
+  Ao usar **Procurar...** em "Rede", entre no servidor e escolha uma **pasta compartilhada específica**, não o ícone raiz "Rede".
+- **Linux**: use o ponto de montagem do compartilhamento CIFS/SMB ou NFS (ex.: `/mnt/nas/backup` ou `/run/user/1000/gvfs/smb-share:...`).
 
 ---
 
@@ -75,47 +78,62 @@ O OmniSync suporta unidades mapeadas e caminhos de rede diretos:
 
 | Categoria | Quando ocorre | O que o OmniSync faz |
 | :--- | :--- | :--- |
-| **Idêntico (Ignorar)** | O arquivo existe na Origem e no Destino com o mesmo tamanho e data (ou mesmo hash SHA-256). | **Nada.** Economiza tempo e evita desgaste de disco/rede. |
-| **Novo (Copiar)** | O arquivo existe na Origem, mas ainda não existe no Destino. | **Copia** o arquivo para o Destino mantendo a mesma estrutura de subpastas e data de modificação. |
-| **Órfão (Mover p/ Lixo)** | O arquivo existe no Destino, mas não existe mais na Origem. | **Move** o arquivo para `<Destino>/lixo/<caminho_relativo>` (nunca apaga permanentemente). |
-| **Conflito** | O arquivo existe na Origem e no Destino com o mesmo nome, mas tamanho, data ou conteúdo diferentes. | **Pergunta a você** se deseja Ignorar ou Substituir (guardando a versão anterior em `<Destino>/old/`). |
+| **Idêntico** | Mesmo tamanho e data (± 2 s) nos dois lados, ou mesmo SHA-256. | **Nada.** |
+| **Novo (copiar)** | Existe só na Origem. | **Copia** para o Destino preservando subpastas e data de modificação. |
+| **Órfão (p/ lixo/)** | Existe só no Destino. | **Move** para `<Destino>/lixo/<caminho_relativo>`. Nunca apaga. |
+| **Conflito** | Mesmo caminho nos dois lados, com tamanho, data ou conteúdo diferentes. A tabela indica qual lado é mais recente. | **Substitui** (versão atual vai para `<Destino>/old/`) ou **ignora**, conforme sua decisão. |
 
 ---
 
 ## 5. Resolvendo Conflitos de Arquivos
 
-Você pode resolver conflitos de duas maneiras:
+### Antes de sincronizar (recomendado)
+- **Coluna Decisão**: escolha **Perguntar**, **Substituir** ou **Ignorar** em cada linha.
+- **Menu Decidir conflitos**:
+  - **Mais recente vence**: substitui quando a origem é mais nova; mantém o destino quando ele é mais novo ou quando as datas coincidem.
+  - **Substituir todos**: versões atuais do destino vão para `old/`.
+  - **Ignorar todos**: mantém o destino como está.
 
-### Opção A: Antes de sincronizar (Em lote na tela principal)
-No cartão **⚠️ Conflitos**, há dois botões de decisão rápida:
-- **Todos p/ old/**: Define que todos os arquivos conflitantes do destino serão movidos para `<Destino>/old/` e atualizados com a versão da Origem.
-- **Todos Ignorar**: Define que todos os arquivos conflitantes serão mantidos como estão no Destino.
-
-### Opção B: Durante a sincronização (Janela Modal Interativa)
-Se houver conflitos pendentes de decisão, o OmniSync exibirá uma janela comparativa lado a lado contendo:
-- **Tamanho e Data de Modificação na Origem (Nova)** vs. **no Destino (Atual)**.
-- Caixa de seleção **"Aplicar esta escolha para todos os outros conflitos"**.
-- Botões **Ignorar (Manter Destino)** e **Substituir (Mover p/ old/)**.
+### Durante a sincronização
+Conflitos ainda em **Perguntar** abrem uma janela comparativa com tamanho e data dos dois lados e um selo **mais recente**. Se o destino for mais novo, um alerta avisa que substituir trocaria uma versão mais nova por uma mais antiga. A opção **Aplicar aos demais conflitos** reaproveita a escolha.
 
 ---
 
 ## 6. Restaurando Arquivos das Pastas `lixo/` e `old/`
 
-- **Restauração Automática de `lixo/`**:
-  - Clique no botão **↩ Restaurar de lixo/** no canto inferior direito da janela principal. Todos os arquivos contidos em `<Destino>/lixo/` serão movidos de volta às suas pastas originais no destino instantaneamente.
-- **Inspeção Manual de `lixo/` e `old/`**:
-  - Clique em **Abrir destino/lixo/ ↗** ou **Abrir destino/old/ ↗** para abrir a pasta correspondente no gerenciador de arquivos do sistema.
-  - Caso um mesmo arquivo seja substituído várias vezes ao longo do tempo, o OmniSync preserva todas as versões anteriores adicionando a data e hora ao nome do arquivo dentro de `old/` (ex.: `relatorio_20261028_114500.xlsx`).
+- **Restaurar de lixo/**: abre a lista dos arquivos em `<Destino>/lixo/`, com seleção individual. Os marcados voltam ao local original.
+  - Se o local original já estiver ocupado, o arquivo **permanece em `lixo/`** e é contado como "mantido". Nada é sobrescrito nem excluído.
+  - Arquivos que receberam sufixo de data em `lixo/` (ex.: `foto_20261028_114500.jpg`) voltam com o nome original quando ele está livre.
+  - Só pastas que ficaram vazias são removidas de `lixo/`.
+  - Depois da restauração, faça uma nova análise.
+- **Abrir lixo/** e **Abrir old/**: abrem as pastas no gerenciador de arquivos. Em `old/`, versões substituídas várias vezes são preservadas com data e hora no nome (ex.: `relatorio_20261028_114500.xlsx`).
 
 ---
 
-## 7. Perguntas Frequentes e Solução de Problemas
+## 7. Garantias de Segurança
+
+- **Nenhuma cópia parcial no destino**: cada arquivo é gravado primeiro como `nome.omnisync-tmp` e só então renomeado. Cancelamento, queda de rede ou falha removem o temporário.
+- **Substituição segura**: a nova versão é copiada antes de a atual ir para `old/`. Se a etapa final falhar, a versão anterior é devolvida ao lugar.
+- **Nunca sobrescreve**: se um arquivo surgir no destino depois da análise, o item falha com aviso em vez de sobrescrever.
+- **Origem e destino aninhados são bloqueados**: destino dentro da origem (ou o contrário) é recusado na análise.
+- **Pastas ilegíveis não geram órfãos**: se uma pasta da origem não puder ser lida, os arquivos correspondentes no destino não são movidos para `lixo/`.
+- **Nomes reservados**: pastas chamadas `lixo` ou `old` na **raiz da origem** são ignoradas com aviso (colidiriam com as pastas de segurança do destino). Renomeie-as para sincronizá-las. Em subpastas, esses nomes funcionam normalmente.
+- **Maiúsculas/minúsculas no Linux**: arquivos que diferem só na caixa (`Foto.JPG` e `foto.jpg`) são tratados como distintos, com aviso, pois colidiriam em destinos NTFS/exFAT/SMB.
+
+---
+
+## 8. Perguntas Frequentes e Solução de Problemas
 
 **1. As pastas `lixo/` e `old/` entram em loop nas próximas sincronizações?**
-Não. O motor de sincronização do OmniSync ignora automaticamente as pastas reservadas `<Destino>/lixo` e `<Destino>/old`, além de pastas internas do sistema operacional (`$RECYCLE.BIN`, `System Volume Information`, `#recycle` de NAS Synology/QNAP e `.Trash`).
+Não. O motor ignora `<Destino>/lixo` e `<Destino>/old`, além de pastas de sistema (`$RECYCLE.BIN`, `System Volume Information`, `#recycle` e `@eaDir` de NAS, `.Trash` e `.Trash-*` do Linux).
 
-**2. O que acontece se a conexão Wi-Fi ou de rede com o NAS oscilar durante a cópia?**
-O OmniSync possui política automática de *Retry* (até 3 tentativas com espera progressiva) para cada arquivo. Se um arquivo falhar parcialmente na tentativa 1, os bytes parciais são descontados e a cópia do arquivo é refeita de forma limpa.
+**2. O que acontece se a rede com o NAS oscilar durante a cópia?**
+Falhas transitórias de E/S são repetidas até 3 vezes, com espera progressiva. Erros definitivos (permissão negada, caminho inexistente) não são repetidos e aparecem no filtro **Erros**.
 
-**3. Onde ficam registrados eventuais erros técnicos?**
-Na aba **📜 Registro de Operações (Log)** dentro do próprio aplicativo e, em caso de falhas graves de ambiente, no arquivo `crash.log` gerado na mesma pasta do executável.
+**3. Onde ficam os registros?**
+- Log completo de cada dia: `omnisync-AAAAMMDD.log` na pasta de logs (botão **Logs**).
+- Falhas inesperadas: `crash.log`.
+- Pasta de dados: `%LOCALAPPDATA%\OmniSync` no Windows; `~/.local/share/OmniSync` no Linux. As configurações ficam em `settings.json` na mesma pasta.
+
+**4. Todos os arquivos de um pendrive aparecem como conflito depois da mudança de horário.**
+Ative **Tolerar 1 h (horário de verão)**. Mídias FAT/exFAT gravam hora local e mudam 1 hora quando o fuso muda.

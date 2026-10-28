@@ -1,4 +1,4 @@
-# 🛠️ Documentação Técnica e de Desenvolvimento — OmniSync
+# Documentação Técnica e de Desenvolvimento — OmniSync
 
 Este documento descreve a arquitetura de software, os algoritmos de sincronização, as decisões de engenharia para alta resiliência em rede/NAS e os procedimentos de manutenção e compilação do **OmniSync**.
 
@@ -23,6 +23,7 @@ Este documento descreve a arquitetura de software, os algoritmos de sincronizaç
 | **Controles Tabulares** | `Avalonia.Controls.DataGrid` `12.1.2` | Grade virtualizada para exibição de dezenas de milhares de arquivos. |
 | **Padrão Arquitetural** | `CommunityToolkit.Mvvm` `8.4.2` | Geradores de código (`[ObservableProperty]`, `[RelayCommand]`) sem overhead de reflexão. |
 | **Testes Automatizados** | `xUnit` `2.9.3` + Modo `--self-test` | Testes de integração de sistema de arquivos e teste E2E da interface gráfica. |
+| **Ícones** | Geometrias vetoriais próprias (`Styles/Icons.axaml`) | Independem de fontes de emoji, ausentes em várias distribuições Linux. |
 
 ---
 
@@ -65,11 +66,13 @@ flowchart TD
 ```
 
 ### Desacoplamento entre View e ViewModel
-O [`MainViewModel`](../ViewModels/MainViewModel.cs) não referencia classes de janelas (`Window`) diretamente. Em vez disso, expõe dois delegates assíncronos que são conectados pela [`MainWindow`](../Views/MainWindow.axaml.cs) no evento `OnDataContextChanged`:
-- `PickFolderAsync`: Encapsula o `IStorageProvider.OpenFolderPickerAsync` do sistema operacional.
-- `AskConflictResolutionAsync`: Encapsula a abertura do modal [`ConflictDialogWindow`](../Views/ConflictDialogWindow.axaml.cs) via `Dispatcher.UIThread.InvokeAsync`.
+O [`MainViewModel`](../ViewModels/MainViewModel.cs) não referencia classes de janelas (`Window`) diretamente. Expõe delegates assíncronos conectados pela [`MainWindow`](../Views/MainWindow.axaml.cs) em `OnDataContextChanged`:
+- `PickFolderAsync` e `PickSaveFileAsync`: seletores nativos do `IStorageProvider`.
+- `AskConflictResolutionAsync`: modal [`ConflictDialogWindow`](../Views/ConflictDialogWindow.axaml.cs).
+- `ConfirmSyncAsync`: janela [`ConfirmSyncWindow`](../Views/ConfirmSyncWindow.axaml) com o resumo do plano.
+- `SelectTrashEntriesAsync`: janela [`RestoreWindow`](../Views/RestoreWindow.axaml) de restauração seletiva.
 
-Isso permite que o `MainViewModel` e o `SyncEngine` sejam testados de ponta a ponta sem depender de interação humana.
+O [`SyncEngine`](../Services/SyncEngine.cs) e o [`RestoreService`](../Services/RestoreService.cs) **não dependem do Avalonia**. O motor publica o estado de cada item por `IProgress<SyncItemUpdate>`; o ViewModel entrega essas atualizações à thread de UI em lote ([`UiBatchQueue`](../ViewModels/UiBatchQueue.cs), a cada 150 ms). Sem canal, o motor aplica o estado diretamente (uso headless e testes).
 
 ---
 
@@ -81,11 +84,10 @@ Isso permite que o `MainViewModel` e o `SyncEngine` sejam testados de ponta a po
 flowchart TD
     Start(["Início: ScanDirectoriesAsync"]) --> CheckSrc{"Origem existe?"}
     CheckSrc -- Não --> ThrowErr["Lança DirectoryNotFoundException"]
-    CheckSrc -- Sim --> IndexSrc["EnumerateFilesResilient(Origem)<br/>Ignora symlinks e pastas inacessíveis"]
-    IndexSrc --> CheckDst{"Destino existe?"}
-    CheckDst -- Sim --> IndexDst["EnumerateFilesResilient(Destino)<br/>Ignora lixo/, old/ e pastas de sistema"]
-    CheckDst -- Não --> Compare["Comparar dicionários (StringComparer.OrdinalIgnoreCase)"]
-    IndexDst --> Compare
+    CheckSrc -- Sim --> Validate{"Mesma pasta ou aninhadas?"}
+    Validate -- Sim --> ThrowNest["Lança InvalidOperationException"]
+    Validate -- Não --> Index["IndexTree(Origem) e IndexTree(Destino) em paralelo<br/>Metadados lidos da própria enumeração<br/>Ignora symlinks, pastas de sistema, exclusões,<br/>lixo/ e old/ na raiz; registra pastas ilegíveis"]
+    Index --> Compare["Comparar dicionários<br/>(Ordinal no Linux, OrdinalIgnoreCase no Windows/macOS;<br/>correspondência por caixa só quando inequívoca)"]
     Compare --> LoopSrc["Para cada arquivo na Origem:"]
     LoopSrc --> ExistsInDst{"Existe no Destino?"}
     ExistsInDst -- Não --> MarkNew["ActionType = New"]
@@ -95,70 +97,91 @@ flowchart TD
     CheckHashOpt -- Sim --> CompareHash{"SHA-256 igual?"}
     CheckHashOpt -- Não --> CompareTime{"|Δ Timestamp| <= 2s?"}
     CompareHash -- Sim --> MarkIdentical["ActionType = Identical"]
+    CompareTime -- "Não, mas Δ = 1 h e tolerância de horário de verão ativa" --> MarkIdentical
     CompareHash -- Não --> MarkConflict
     CompareTime -- Sim --> MarkIdentical
     CompareTime -- Não --> MarkConflict
     MarkNew & MarkIdentical & MarkConflict --> LoopOrphans["Para cada arquivo no Destino ausente na Origem:"]
-    LoopOrphans --> MarkOrphan["ActionType = OrphanTrash"]
-    MarkOrphan --> End(["Retorna List<SyncItem>"])
+    LoopOrphans --> Unreadable{"Pasta correspondente na Origem ilegível?"}
+    Unreadable -- Sim --> Protect["Não classifica; gera aviso"]
+    Unreadable -- Não --> MarkOrphan["ActionType = OrphanTrash"]
+    MarkOrphan & Protect --> End(["Retorna ScanResult (itens + avisos + contagens)"])
 ```
 
 ### 3.2. Fase 2: Execução Física (`ExecuteSyncAsync`)
 
-Toda a execução física ocorre dentro de `Task.Run` em thread de background:
+Antes da execução, o `MainViewModel` apresenta o resumo do plano (`SyncPlanSummary`) e só prossegue com a confirmação do usuário. O critério de remoção em massa (`IsMassOrphan`) é: ≥ 1.000 órfãos, ou ≥ 10 órfãos representando ≥ 20% dos arquivos do destino. Nesse caso, a confirmação exige marcação explícita.
 
-1. **Cálculo de Carga Total**: Soma os bytes de todos os itens `New` e `Conflict` para compor o denominador da barra de progresso global.
-2. **Processamento de `OrphanTrash`**:
-   - Move o arquivo órfão de `<Destino>/<relPath>` para `<Destino>/lixo/<relPath>` através de `MoveFileSafely`.
-3. **Processamento de `Conflict`**:
-   - Caso `Resolution == ConflictResolution.AskUser`, pausa o `Stopwatch` de cálculo de velocidade/ETA, solicita a decisão na UI thread via `resolveConflictAsync(item)` e retoma o `Stopwatch`.
-   - Se a decisão for `Ignore`, subtrai `item.SourceSize` de `totalBytesToCopy` (via `Interlocked.Add`) para evitar que a barra de progresso termine antes de 100%.
-   - Se a decisão for `Replace`, move o arquivo atual do destino para `<Destino>/old/<relPath>` e copia a nova versão da origem.
-4. **Processamento de `New`**:
-   - Copia o arquivo em streaming assíncrono (`BufferSize = 2 MB`) e aplica `File.SetLastWriteTimeUtc` ao final para preservar a data de modificação original.
+Toda a execução ocorre em `Task.Run`. Itens idênticos ou já processados são pulados.
+
+1. **`OrphanTrash`**: `PathHelper.MoveIntoReservedFolder` move para `<Destino>/lixo/<relPath>` sem sobrescrever (sufixo de data em colisão). Se o arquivo já não existe, o item é contado como **pulado**. Ao final, pastas que ficaram vazias são removidas com exclusão **não recursiva**.
+2. **`Conflict`**: se `Resolution == AskUser`, o cronômetro de velocidade/ETA é pausado e `resolveConflictAsync` é chamado. Em `Ignore`, os bytes do item saem do total previsto. Em `Replace`, a ordem é:
+   1. copiar a nova versão para `<arquivo>.omnisync-tmp`;
+   2. mover a versão atual para `<Destino>/old/<relPath>`;
+   3. renomear o temporário para o nome final.
+
+   Se (2) ou (3) falhar, o temporário é removido e a versão anterior é devolvida ao lugar.
+3. **`New`**: se já existir arquivo no destino (surgiu após a análise, ou difere só na caixa), o item **falha** sem sobrescrever. Caso contrário, copia para temporário e renomeia com `overwrite: false`.
+
+A cópia (`CopyToTempWithRetryAsync`) usa buffer de 2 MB do `ArrayPool`, `FileStream` sem buffer interno (`BufferSize = 0`), `SequentialScan`, pré-alocação (`PreallocationSize`) e verificação do total de bytes contra o tamanho da origem. A data de modificação é aplicada ao temporário antes da renomeação.
+
+O método retorna `SyncResult` (copiados, substituídos, movidos, ignorados, pulados, falhas, bytes e duração). Itens com falha ficam com `HasError = true` e `IsProcessed = false`, e podem ser reprocessados.
 
 ---
 
 ## 4. Decisões de Engenharia e Resiliência
 
-### 4.1. Varredura Resiliente a Pastas de Sistema (`EnumerateFilesResilient`)
-O método padrão `Directory.EnumerateFiles(..., SearchOption.AllDirectories)` do .NET aborta toda a operação caso encontre uma única subpasta sem permissão de leitura (como `System Volume Information` ou `$RECYCLE.BIN`).
-Para contornar isso, o `SyncEngine` implementa uma travessia iterativa baseada em `Stack<string>` com `EnumerationOptions`:
-- `IgnoreInaccessible = true`
-- `AttributesToSkip = FileAttributes.ReparsePoint` (evita loops infinitos em links simbólicos e junctions)
-- Filtragem explícita de `$RECYCLE.BIN`, `System Volume Information`, `#recycle` (NAS Synology/QNAP), `.Trash` e `.Trash-1000` (Linux), além das pastas reservadas `lixo` e `old` na raiz do destino.
+### 4.1. Varredura (`IndexTree`)
+- Pilha explícita com `FileSystemEnumerable<T>` por pasta: nome, tipo, tamanho e data vêm da própria enumeração, sem `new FileInfo()` por arquivo. Em SMB/NAS, isso elimina uma ida e volta de rede por arquivo.
+- Uma única enumeração por pasta devolve arquivos e subpastas (antes eram `GetFiles` + `GetDirectories`).
+- Origem e destino são indexados em paralelo.
+- `IgnoreInaccessible = false` com tratamento por pasta: pastas ilegíveis são **registradas**. Arquivos do destino sob uma pasta ilegível da origem **não viram órfãos**, para que uma falha de leitura nunca leve dados válidos para `lixo/`.
+- Ignorados: `$RECYCLE.BIN`, `System Volume Information`, `#recycle`, `@eaDir`, `.Trash`, `.Trash-*`, temporários `*.omnisync-tmp`, padrões de exclusão do usuário (`FileSystemName.MatchesSimpleExpression`, sem diferenciar caixa) e, na raiz, `lixo/` e `old/`. Na **origem**, `lixo/` e `old/` na raiz são ignorados **com aviso**, pois colidiriam com as pastas reservadas do destino.
 
-### 4.2. Proteção contra Sincronização Acidental na Raiz de Discos
-A propriedade `UseSourceFolderNameInDestination` (ativa por padrão em [`MainViewModel.ResolveEffectiveDestinationPath`](../ViewModels/MainViewModel.cs)) garante que quando o usuário seleciona uma pasta de origem (ex.: `E:\Paglioli - Copia`) e escolhe a raiz de um disco ou pasta pai no destino (ex.: `G:\`), o caminho efetivo de destino seja automaticamente ajustado para `G:\Paglioli - Copia`. Isso impede que outras pastas pré-existentes no drive `G:\` sejam classificadas como órfãs.
+### 4.2. Maiúsculas e minúsculas
+`PathHelper.PathComparer` é `Ordinal` em plataformas que diferenciam caixa (Linux) e `OrdinalIgnoreCase` em Windows/macOS. No Linux:
+- arquivos da origem que diferem só na caixa são itens distintos e geram aviso;
+- se um arquivo da origem só encontra par no destino ignorando a caixa, e a correspondência é única nos dois lados, ele é tratado como o mesmo arquivo (cenário típico: destino em exFAT/SMB). Isso evita copiar por cima e em seguida mover a própria cópia para `lixo/`.
 
-### 4.3. Tratamento de Concorrência, UI Thread e Throttling
-- **Throttling de Progresso**: O callback `ReportProgress` limita o envio de eventos `IProgress<SyncProgressReport>` a no máximo 1 atualização a cada **80 ms** (`Environment.TickCount64`), evitando saturação da fila de mensagens da UI durante cópias em SSDs NVMe de alta velocidade.
-- **Prevenção de `OverflowException` em ETA**: O cálculo de tempo restante (`remainingBytes / bytesPerSec`) aplica `Math.Clamp(secondsRemaining, 0, 86400.0 * 30)` antes de chamar `TimeSpan.FromSeconds`, prevenindo exceções quando a taxa de transferência cai momentaneamente próxima de zero em redes Wi-Fi/NAS.
-- **Substituição Atômica de `FilteredItems`**: A propriedade `FilteredItems` utiliza `IReadOnlyList<SyncItem>` em vez de adicionar itens um a um em uma `ObservableCollection`, permitindo trocar dezenas de milhares de linhas na `DataGrid` em uma única notificação de layout.
+### 4.3. Verificação profunda (SHA-256)
+Pares de mesmo tamanho são agrupados e verificados com `Parallel.ForEachAsync` (paralelismo = mín(núcleos, 4)). Em cada par, origem e destino são lidos simultaneamente (`SHA256.HashDataAsync`).
 
-### 4.4. Colisão de Nomes nas Pastas `lixo/` e `old/`
-O método `GetSafeTargetPath` verifica se já existe um arquivo com o mesmo nome dentro de `destino/lixo/` ou `destino/old/`. Caso exista, gera um nome único acrescentando o sufixo `_yyyyMMdd_HHmmss` (e contador incremental se necessário), preservando todo o histórico de versões anteriores.
+### 4.4. Proteção contra sincronização acidental
+- **Subpasta por nome da origem** (`ResolveEffectiveDestinationPath`): `E:\Fotos` + `G:\` → `G:\Fotos`.
+- **Pastas aninhadas bloqueadas**: destino dentro da origem ou origem dentro do destino lançam `InvalidOperationException`.
+- **Plano invalidado**: alterar origem, destino, SHA-256, tolerância de horário de verão ou exclusões após a análise descarta o plano.
+- **Confirmação** com alerta de remoção em massa (seção 3.2).
+
+### 4.5. Retentativa
+Até 3 tentativas com espera de 1 s × tentativa, **apenas para `IOException` transitória**. `FileNotFoundException`, `DirectoryNotFoundException`, `PathTooLongException`, `DriveNotFoundException` e `UnauthorizedAccessException` falham na hora.
+
+### 4.6. Concorrência, UI e progresso
+- **Status e log em lote**: `UiBatchQueue<T>` acumula em `ConcurrentQueue` e entrega à UI a cada 150 ms. Antes, cada arquivo exigia um `Dispatcher.InvokeAsync(...).GetResult()` síncrono, o principal gargalo em árvores grandes.
+- **Throttling de progresso**: no máximo 1 relatório a cada 80 ms.
+- **ETA**: `Math.Clamp(secondsRemaining, 0, 86400 × 30)` antes de `TimeSpan.FromSeconds`.
+- **Troca atômica de `FilteredItems`** (`IReadOnlyList<SyncItem>`), com filtro por categoria e busca por caminho.
+
+### 4.7. Restauração (`RestoreService`)
+- Atua apenas em `<Destino>/lixo/` e recusa entradas fora dele.
+- Restaura somente os arquivos selecionados pelo usuário.
+- Nunca sobrescreve nem exclui: se o local original estiver ocupado, o arquivo permanece em `lixo/`.
+- Remove o sufixo de desambiguação (`_yyyyMMdd_HHmmss[_n]`) quando o nome original está livre.
+- Remove apenas pastas vazias de `lixo/`.
+
+### 4.8. Persistência e diagnóstico
+Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou `~/.local/share/OmniSync` (Linux).
+- `settings.json`: últimas pastas e opções (gravação atômica).
+- `logs/omnisync-AAAAMMDD.log`: log completo de todas as operações.
+- `crash.log` e `selftest.log`.
 
 ---
 
 ## 5. Estrutura de Testes Automatizados
 
-O projeto conta com duas camadas de verificação automatizada:
-
-1. **Testes Unitários e de Integração ([`Tests/SyncEngineTests.cs`](../Tests/SyncEngineTests.cs))**:
-   - `Scan_ShouldIdentifyNewFiles_WhenOnlyInSource`
-   - `Scan_ShouldIdentifyIdenticalFiles_WhenSameSizeAndTime`
-   - `Scan_ShouldIdentifyOrphanFiles_WhenOnlyInDestination`
-   - `Scan_ShouldIgnoreLixoAndOldFoldersInDestination`
-   - `Scan_ShouldDetectConflict_WhenContentDiffers`
-   - `Scan_ShouldDetectConflictViaSha256_WhenSizeMatchesButHashDiffers`
-   - `ExecuteSync_ShouldCopyNewFiles`
-   - `ExecuteSync_ShouldMoveOrphansToLixoFolder`
-   - `ExecuteSync_WhenConflictReplace_MovesOldToOldFolderAndCopiesNew`
-   - `ExecuteSync_WhenConflictIgnore_KeepsDestinationIntact`
-
-2. **Autoteste E2E da Interface Gráfica (`--self-test` em [`App.axaml.cs`](../App.axaml.cs))**:
-   - Inicializa a janela real do Avalonia, cria diretórios temporários de teste, executa `ScanCommand` e `StartSyncCommand` através do `MainViewModel`, grava o resultado em `selftest.log` e encerra o processo com código `0`.
+1. **[`Tests/SyncEngineTests.cs`](../Tests/SyncEngineTests.cs)**: classificação (novo, idêntico, órfão, conflito, SHA-256), pastas reservadas, aninhamento, nomes reservados na origem, caixa no Linux, exclusões, tolerância de horário de verão, cópia e reanálise idêntica, não sobrescrita após a análise, cancelamento sem arquivo parcial, substituição segura quando a cópia falha, órfão já removido, poda de pastas vazias e canal de atualização de itens.
+2. **[`Tests/RestoreServiceTests.cs`](../Tests/RestoreServiceTests.cs)**: restauração simples, manutenção em `lixo/` quando o destino está ocupado, isolamento da `lixo/` da pasta pai, remoção do sufixo de data, preservação de `lixo/` não vazia, recusa de entradas externas e restauração seletiva.
+3. **[`Tests/ModelTests.cs`](../Tests/ModelTests.cs)**: direção do conflito, mapeamento da decisão na grade, critério de remoção em massa e severidade do log.
+4. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
 
 ---
 

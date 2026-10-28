@@ -1,4 +1,4 @@
-# 🔄 OmniSync — Sincronizador de Arquivos Multiplataforma
+# OmniSync — Sincronizador de Arquivos Multiplataforma
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
@@ -15,9 +15,11 @@ Diferente de ferramentas tradicionais que apagam ou sobrescrevem arquivos irreve
 
 1. **Arquivos Idênticos (Ignorados)**: Arquivos presentes na Origem e no Destino com o mesmo tamanho e data de modificação (ou mesmo hash **SHA-256**) não são copiados novamente.
 2. **Arquivos Novos (Cópia Incremental)**: Arquivos que existem na Origem e ainda não existem no Destino são copiados preservando toda a hierarquia de subpastas e o timestamp original.
-3. **Arquivos Órfãos (`destino/lixo/`)**: Arquivos que não existem mais na Origem, mas permanecem no Destino, **nunca são excluídos diretamente** — são movidos para a pasta `<Destino>/lixo/<caminho_relativo>` e podem ser restaurados com 1 clique.
-4. **Arquivos Conflitantes (`destino/old/`)**: Quando um arquivo existe em ambos os diretórios com o mesmo nome mas conteúdo diferente, o aplicativo exibe um **modal comparativo lado a lado** permitindo escolher entre **Ignorar** ou **Substituir** (com opção *"Aplicar para todos"*). Ao substituir, a versão antiga do destino é preservada em `<Destino>/old/<caminho_relativo>`.
+3. **Arquivos Órfãos (`destino/lixo/`)**: Arquivos que não existem mais na Origem, mas permanecem no Destino, **nunca são excluídos** — são movidos para `<Destino>/lixo/<caminho_relativo>` e podem ser restaurados seletivamente, sem sobrescrever nada.
+4. **Arquivos Conflitantes (`destino/old/`)**: Quando um arquivo existe nos dois lados com conteúdo diferente, a prévia indica qual lado é mais recente. A decisão (**Substituir**, **Ignorar** ou **Mais recente vence**) pode ser tomada na própria tabela antes de sincronizar, ou em um modal comparativo durante a execução. Ao substituir, a versão anterior é preservada em `<Destino>/old/<caminho_relativo>`.
 5. **Subpasta Automática por Nome da Origem**: Ao selecionar uma pasta de origem (ex.: `E:\Projetos`) e apontar para a raiz de outro drive (ex.: `G:\`), o OmniSync direciona automaticamente a sincronização para `G:\Projetos`, protegendo as demais pastas do disco de destino.
+6. **Escrita atômica e confirmação prévia**: cada cópia é gravada em arquivo temporário e renomeada ao final (cancelamentos e quedas de rede não deixam arquivos truncados). Antes de executar, uma janela resume o plano e exige confirmação explícita quando grande parte do destino iria para `lixo/`.
+7. **Auditoria**: log diário completo em arquivo e exportação do plano/resultado em CSV.
 
 ---
 
@@ -43,7 +45,7 @@ dotnet run --project OmniSync.csproj
 # Testes unitários e de integração (xUnit)
 dotnet test Tests/OmniSync.Tests.csproj
 
-# Autoteste de ponta a ponta da interface gráfica
+# Autoteste de ponta a ponta da interface gráfica (resultado em selftest.log na pasta de dados do usuário)
 dotnet run --project OmniSync.csproj -- --self-test
 ```
 
@@ -67,26 +69,35 @@ chmod +x publish/linux-x64/OmniSync
 
 ```text
 OmniSync/
-├── Assets/                     # Ícones e recursos visuais embutidos
+├── Assets/                     # Ícone do aplicativo (PNG e ICO)
 ├── Models/                     # Modelos de dados e enums de domínio
-│   ├── SyncActionType.cs       # Tipos de ação (Identical, New, OrphanTrash, Conflict) e resolução
+│   ├── SyncActionType.cs       # Tipos de ação, resolução e direção do conflito
+│   ├── SyncContracts.cs        # Opções/resultado da varredura, atualizações de item, balanço, lixo/
 │   ├── SyncItem.cs             # Representação observável de cada arquivo analisado
 │   └── SyncProgressReport.cs   # Telemetria de progresso, velocidade (MB/s) e ETA
-├── Services/                   # Camada de serviços e regras de negócio
+├── Services/                   # Regras de negócio, sem dependência da interface
 │   ├── ISyncEngine.cs          # Interface do motor de sincronização
-│   └── SyncEngine.cs           # Implementação assíncrona resiliente (I/O, SHA-256, Retry)
+│   ├── SyncEngine.cs           # Varredura paralela, SHA-256 paralelo, cópia atômica com retentativa
+│   ├── RestoreService.cs       # Restauração não destrutiva de lixo/
+│   ├── PathHelper.cs           # Comparação de caminhos por SO e movimentações seguras
+│   ├── FileLogService.cs       # Log diário em arquivo
+│   ├── SettingsService.cs      # Preferências do usuário (JSON)
+│   ├── ReportExporter.cs       # Exportação CSV
+│   └── AppPaths.cs             # Pasta de dados por usuário
 ├── ViewModels/                 # Camada MVVM de apresentação e comandos
-│   ├── ViewModelBase.cs        # Classe base ObservableObject
-│   ├── MainViewModel.cs        # Orquestração da tela principal, filtros, logs e restauração
-│   └── ConflictDialogViewModel.cs # Estado e decisão do modal de conflito
+│   ├── MainViewModel.cs        # Tela principal: análise, confirmação, execução, filtros, restauração
+│   ├── ConflictDialogViewModel.cs / ConfirmSyncViewModel.cs / RestoreViewModel.cs
+│   ├── UiBatchQueue.cs         # Entrega em lote de log e status à thread de UI
+│   └── UiModels.cs             # Filtros, entradas de log e resumo do plano
 ├── Views/                      # Interfaces gráficas declarativas (Avalonia XAML)
-│   ├── MainWindow.axaml(.cs)   # Janela principal e integração nativa com StorageProvider
-│   └── ConflictDialogWindow.axaml(.cs) # Modal comparativo lado a lado
-├── Tests/                      # Projeto de testes automatizados (xUnit)
-│   └── SyncEngineTests.cs      # Testes de integração das regras de sincronização
+│   ├── MainWindow.axaml(.cs)   # Janela principal
+│   ├── ConflictDialogWindow / ConfirmSyncWindow / RestoreWindow
+│   └── Converters.cs
+├── Styles/                     # Paleta claro/escuro, ícones vetoriais e estilos
+├── Tests/                      # Testes automatizados (xUnit)
 ├── docs/                       # Manuais de usuário e documentação de arquitetura
 ├── App.axaml(.cs)              # Configuração global da aplicação e handler de exceções UI
-└── Program.cs                  # Ponto de entrada e diagnóstico de falhas (crash.log)
+└── Program.cs                  # Ponto de entrada e diagnóstico de falhas (crash.log na pasta de dados)
 ```
 
 ---
