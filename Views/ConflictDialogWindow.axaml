@@ -3,94 +3,88 @@
         xmlns:vm="using:OmniSync.ViewModels"
         x:Class="OmniSync.Views.ConflictDialogWindow"
         x:DataType="vm:ConflictDialogViewModel"
-        Title="Conflito de Arquivo Detectado"
-        Width="580" Height="420"
+        Icon="/Assets/omnisync.ico"
+        Title="Conflito de arquivo"
+        Width="600" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
-        CanResize="False"
-        ExtendClientAreaToDecorationsHint="False">
+        CanResize="False">
 
-    <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto,Auto">
-        
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="0,0,0,14">
-            <TextBlock Text="⚠️" FontSize="26" VerticalAlignment="Center" />
+    <StackPanel Margin="24,20" Spacing="14">
+        <!-- Cabeçalho -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <PathIcon Data="{StaticResource IconConflict}" Width="26" Height="26" Classes="conflict" />
             <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Conflito de Arquivo Detectado" FontSize="18" FontWeight="Bold" />
-                <TextBlock Text="O arquivo abaixo existe em ambos os diretórios, mas seu conteúdo difere." 
-                           Foreground="{DynamicResource SystemBaseMediumColor}" FontSize="12" />
+                <TextBlock Text="Conflito de arquivo" FontSize="18" FontWeight="Bold" />
+                <TextBlock Classes="subtle" FontSize="12" Text="O arquivo existe nos dois lados com conteúdo diferente." />
             </StackPanel>
         </StackPanel>
 
-        <!-- File Name Box -->
-        <Border Grid.Row="1" Background="{DynamicResource SystemChromeLowColor}" 
-                CornerRadius="6" Padding="12,8" Margin="0,0,0,16" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1">
-            <TextBlock Text="{Binding Item.RelativePath}" FontFamily="Consolas, Cascadia Code, monospace" 
-                       FontWeight="SemiBold" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource AccentButtonBackground}" />
+        <!-- Nome do arquivo -->
+        <Border Classes="card" Padding="12,8">
+            <TextBlock Text="{Binding Item.RelativePath}" FontFamily="Cascadia Mono, Consolas, DejaVu Sans Mono, monospace"
+                       FontWeight="SemiBold" TextWrapping="Wrap" FontSize="13" />
         </Border>
 
-        <!-- Side-by-Side Comparison -->
-        <Grid Grid.Row="2" ColumnDefinitions="*,12,*" Margin="0,0,0,16">
-            
-            <!-- Source Card -->
-            <Border Grid.Column="0" Background="{DynamicResource SystemChromeLowColor}" 
-                    BorderBrush="{DynamicResource AccentButtonBackground}" BorderThickness="1.5" 
-                    CornerRadius="8" Padding="14">
+        <!-- Comparação lado a lado -->
+        <Grid ColumnDefinitions="*,12,*">
+            <Border Classes="card" Padding="14">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="📁 Versão na Origem (Nova)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource AccentButtonBackground}" />
-                    <Separator Margin="0,2,0,4" />
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="Tamanho:" Foreground="{DynamicResource SystemBaseMediumColor}" FontSize="12"/>
-                        <TextBlock Text="{Binding Item.FormattedSourceSize}" FontWeight="SemiBold" FontSize="12"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="Data:" Foreground="{DynamicResource SystemBaseMediumColor}" FontSize="12"/>
-                        <TextBlock Text="{Binding Item.FormattedSourceDate}" FontSize="12"/>
-                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconFolder}" Classes="small" />
+                            <TextBlock Text="Origem" FontWeight="Bold" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Classes="badge" IsVisible="{Binding IsSourceNewer}">
+                            <TextBlock Text="mais recente" FontSize="11" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                    <Separator Margin="0,2" />
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                        <TextBlock Classes="subtle" Text="Tamanho" />
+                        <TextBlock Grid.Column="1" Text="{Binding Item.FormattedSourceSize}" FontWeight="SemiBold" />
+                        <TextBlock Grid.Row="1" Classes="subtle" Text="Modificado" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Item.FormattedSourceDate}" />
+                    </Grid>
                 </StackPanel>
             </Border>
 
-            <!-- Destination Card -->
-            <Border Grid.Column="2" Background="{DynamicResource SystemChromeLowColor}" 
-                    BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" 
-                    CornerRadius="8" Padding="14">
+            <Border Grid.Column="2" Classes="card" Padding="14">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="🖧 Versão no Destino (Atual)" FontWeight="Bold" FontSize="13" />
-                    <Separator Margin="0,2,0,4" />
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="Tamanho:" Foreground="{DynamicResource SystemBaseMediumColor}" FontSize="12"/>
-                        <TextBlock Text="{Binding Item.FormattedDestinationSize}" FontWeight="SemiBold" FontSize="12"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="Data:" Foreground="{DynamicResource SystemBaseMediumColor}" FontSize="12"/>
-                        <TextBlock Text="{Binding Item.FormattedDestinationDate}" FontSize="12"/>
-                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconDrive}" Classes="small" />
+                            <TextBlock Text="Destino" FontWeight="Bold" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Classes="badge" IsVisible="{Binding IsDestinationNewer}">
+                            <TextBlock Text="mais recente" FontSize="11" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                    <Separator Margin="0,2" />
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                        <TextBlock Classes="subtle" Text="Tamanho" />
+                        <TextBlock Grid.Column="1" Text="{Binding Item.FormattedDestinationSize}" FontWeight="SemiBold" />
+                        <TextBlock Grid.Row="1" Classes="subtle" Text="Modificado" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Item.FormattedDestinationDate}" />
+                    </Grid>
                 </StackPanel>
             </Border>
-
         </Grid>
 
-        <!-- Security Hint -->
-        <Border Grid.Row="3" Background="{DynamicResource SystemChromeLowColor}" 
-                CornerRadius="6" Padding="10,6" Margin="0,0,0,16">
-            <TextBlock Text="💡 Ao substituir, a versão atual do destino será guardada com segurança em destino/old/."
-                       FontSize="11.5" Foreground="{DynamicResource SystemBaseMediumColor}" TextWrapping="Wrap" />
+        <!-- Orientação -->
+        <Border Classes="warning-banner" IsVisible="{Binding IsDestinationNewer}">
+            <TextBlock Text="{Binding DirectionHint}" TextWrapping="Wrap" FontSize="12" />
         </Border>
+        <TextBlock Classes="subtle" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding !IsDestinationNewer}"
+                   Text="{Binding DirectionHint}" />
+        <TextBlock Classes="subtle" FontSize="12" TextWrapping="Wrap"
+                   Text="Ao substituir, a versão atual do destino é guardada em destino/old/ antes de ser trocada." />
 
-        <!-- Actions & Apply to All Checkbox -->
-        <Grid Grid.Row="4" ColumnDefinitions="*,Auto,8,Auto">
-            <CheckBox Grid.Column="0" Content="Aplicar esta escolha para todos os outros conflitos" 
-                      IsChecked="{Binding ApplyToAllRemaining}" 
-                      FontSize="12" VerticalAlignment="Center" />
-
-            <Button Grid.Column="1" Content="Ignorar (Manter Destino)" 
-                    Command="{Binding IgnoreCommand}" 
-                    Padding="14,8" FontSize="12" />
-
-            <Button Grid.Column="3" Content="Substituir (Mover p/ old/)" 
-                    Command="{Binding ReplaceCommand}" 
-                    Classes="accent"
-                    Padding="16,8" FontWeight="SemiBold" FontSize="12" />
+        <!-- Ações -->
+        <Grid ColumnDefinitions="*,Auto,8,Auto">
+            <CheckBox Content="Aplicar aos demais conflitos" IsChecked="{Binding ApplyToAllRemaining}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Ignorar (manter destino)" Command="{Binding IgnoreCommand}" Padding="14,8" />
+            <Button Grid.Column="3" Content="Substituir" Command="{Binding ReplaceCommand}" Classes="accent"
+                    Padding="18,8" FontWeight="SemiBold" />
         </Grid>
-
-    </Grid>
+    </StackPanel>
 </Window>

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
+using OmniSync.Services;
 
 namespace OmniSync;
 
@@ -36,6 +37,7 @@ public sealed class Program
         {
             BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args);
+            FileLogService.Close();
         }
         catch (Exception ex)
         {
@@ -45,7 +47,8 @@ public sealed class Program
     }
 
     /// <summary>
-    /// Registra detalhes de falhas inesperadas no arquivo <c>crash.log</c> junto ao diretório do executável.
+    /// Registra detalhes de falhas inesperadas no arquivo <c>crash.log</c> da pasta de dados do usuário
+    /// (<see cref="AppPaths.CrashLogFile"/>), que é sempre gravável, ao contrário da pasta do executável.
     /// </summary>
     /// <param name="source">Identificador da origem da exceção.</param>
     /// <param name="ex">Objeto da exceção capturada.</param>
@@ -54,11 +57,13 @@ public sealed class Program
         try
         {
             var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{source}]\n{ex}\n\n";
-            File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "crash.log"), msg);
+            Directory.CreateDirectory(AppPaths.DataDirectory);
+            File.AppendAllText(AppPaths.CrashLogFile, msg);
+            FileLogService.Write($"[ERRO CRÍTICO] [{source}] {ex?.Message}");
         }
         catch
         {
-            // Ignora falhas de escrita caso o diretório base esteja em mídia somente leitura
+            // Ignora falhas de escrita para não mascarar a exceção original
         }
     }
 

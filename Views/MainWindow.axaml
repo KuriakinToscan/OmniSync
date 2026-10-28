@@ -2,252 +2,386 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:OmniSync.ViewModels"
         xmlns:models="using:OmniSync.Models"
+        xmlns:views="using:OmniSync.Views"
         x:Class="OmniSync.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="OmniSync - Sincronizador de Arquivos Multiplataforma"
-        Width="1050" Height="720"
-        MinWidth="800" MinHeight="600"
+        Icon="/Assets/omnisync.ico"
+        Title="OmniSync"
+        Width="1120" Height="760"
+        MinWidth="820" MinHeight="620"
         WindowStartupLocation="CenterScreen">
 
-    <Grid Margin="18" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+    <Window.KeyBindings>
+        <KeyBinding Gesture="F5" Command="{Binding ScanCommand}" />
+        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding StartSyncCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+    </Window.KeyBindings>
 
-        <!-- 1. Header -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,14">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <Border Background="{DynamicResource AccentButtonBackground}" CornerRadius="10" Width="38" Height="38">
-                    <TextBlock Text="🔄" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
+    <Grid Margin="18,14,18,12" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+
+        <!-- 1. Cabeçalho -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Image Source="/Assets/omnisync.png" Width="34" Height="34" />
                 <StackPanel VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="OmniSync" FontSize="18" FontWeight="Bold" />
-                        <Border Background="{DynamicResource SystemChromeLowColor}" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="4" Padding="6,2">
-                            <TextBlock Text="Windows &amp; Linux" FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                        </Border>
-                    </StackPanel>
-                    <TextBlock Text="Sincronizador inteligente de arquivos com suporte a Drives Locais e NAS" 
-                               FontSize="12" Foreground="{DynamicResource SystemBaseMediumColor}" />
+                    <TextBlock Text="OmniSync" FontSize="18" FontWeight="Bold" />
+                    <TextBlock Classes="caption" Text="Sincronização unidirecional com lixeira (lixo/) e histórico de versões (old/)" />
                 </StackPanel>
             </StackPanel>
-
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Border Background="{DynamicResource SystemChromeLowColor}" CornerRadius="6" Padding="10,6" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1">
-                    <TextBlock Text="🖧 Pronto para NAS / UNC" FontSize="11.5" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                </Border>
-            </StackPanel>
+            <Button Grid.Column="2" Classes="ghost" Command="{Binding OpenLogsFolderCommand}"
+                    ToolTip.Tip="Abrir a pasta com os logs completos de todas as execuções"
+                    AutomationProperties.Name="Abrir pasta de logs">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource IconLog}" Classes="small" />
+                    <TextBlock Text="Logs" />
+                </StackPanel>
+            </Button>
         </Grid>
 
-        <!-- 2. Path Selector & Actions Card -->
-        <Border Grid.Row="1" Background="{DynamicResource SystemChromeLowColor}" 
-                BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" 
-                CornerRadius="10" Padding="14" Margin="0,0,0,12">
-            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
-                
+        <!-- 2. Seleção de pastas, opções e ações -->
+        <Border Grid.Row="1" Classes="card" Padding="14,12" Margin="0,0,0,10">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,14,*">
-                    <!-- Source Directory -->
-                    <StackPanel Grid.Column="0" Spacing="5">
-                        <TextBlock Text="📁 Diretório de Origem" FontWeight="SemiBold" FontSize="12.5" />
+                    <StackPanel Spacing="5">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconFolder}" Classes="small" />
+                            <TextBlock Classes="section" Text="Origem" />
+                        </StackPanel>
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                            <TextBox Grid.Column="0" Text="{Binding SourcePath}" PlaceholderText="Ex: G:\MeusProjetos ou /home/usuario/docs" FontSize="12" />
-                            <Button Grid.Column="1" Content="Procurar..." Command="{Binding BrowseSourceCommand}" FontSize="12" />
+                            <TextBox Text="{Binding SourcePath}" PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
+                                     AutomationProperties.Name="Diretório de origem" />
+                            <Button Grid.Column="1" Content="Procurar..." Command="{Binding BrowseSourceCommand}" />
                         </Grid>
                     </StackPanel>
 
-                    <!-- Destination Directory -->
                     <StackPanel Grid.Column="2" Spacing="5">
-                        <TextBlock Text="🖧 Diretório de Destino (Local ou NAS)" FontWeight="SemiBold" FontSize="12.5" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconDrive}" Classes="small" />
+                            <TextBlock Classes="section" Text="Destino (local ou NAS)" />
+                        </StackPanel>
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                            <TextBox Grid.Column="0" Text="{Binding DestinationPath}" PlaceholderText="Ex: \\nas\share\backup ou /mnt/nas/backup" FontSize="12" />
-                            <Button Grid.Column="1" Content="Procurar..." Command="{Binding BrowseDestinationCommand}" FontSize="12" />
+                            <TextBox Text="{Binding DestinationPath}" PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
+                                     AutomationProperties.Name="Diretório de destino" />
+                            <Button Grid.Column="1" Content="Procurar..." Command="{Binding BrowseDestinationCommand}" />
                         </Grid>
                     </StackPanel>
                 </Grid>
 
-                <!-- Options & Action Buttons -->
-                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                        <CheckBox Content="Criar/usar subpasta com nome da origem" 
-                                  IsChecked="{Binding UseSourceFolderNameInDestination}" 
-                                  ToolTip.Tip="Ex: Origem 'E:\Fotos' + Destino 'G:\' sincroniza em 'G:\Fotos' sem afetar outras pastas do drive G:"
-                                  FontSize="12" />
-                        <CheckBox Content="Verificação SHA-256" 
-                                  IsChecked="{Binding EnableDeepHashCheck}" 
-                                  FontSize="12" />
-                    </StackPanel>
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <WrapPanel VerticalAlignment="Center" ItemSpacing="16" LineSpacing="4">
+                        <CheckBox Content="Subpasta com nome da origem"
+                                  IsChecked="{Binding UseSourceFolderNameInDestination}"
+                                  ToolTip.Tip="Origem 'E:\Fotos' + Destino 'G:\' sincroniza em 'G:\Fotos' sem afetar outras pastas do drive G:" />
+                        <CheckBox Content="Verificar conteúdo (SHA-256)"
+                                  IsChecked="{Binding EnableDeepHashCheck}"
+                                  ToolTip.Tip="Arquivos de mesmo tamanho são comparados pelo conteúdo, não pela data. Mais lento, mais seguro." />
+                        <CheckBox Content="Tolerar 1 h (horário de verão)"
+                                  IsChecked="{Binding TolerateDstShift}"
+                                  ToolTip.Tip="Considera iguais arquivos cuja data difere exatamente 1 hora. Útil com pendrives/HDs em FAT ou exFAT." />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="Ignorar:" VerticalAlignment="Center" Classes="subtle" />
+                            <TextBox Text="{Binding ExcludePatternsText}" Width="230"
+                                     ToolTip.Tip="Padrões separados por ponto e vírgula, aplicados ao nome de arquivos e pastas (* e ?). Ex.: Thumbs.db; ~$*; *.tmp"
+                                     AutomationProperties.Name="Padrões de exclusão" />
+                        </StackPanel>
+                    </WrapPanel>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-                        <Button Content="🔍 1. Analisar Diferenças (Dry-Run)" 
-                                Command="{Binding ScanCommand}" 
-                                IsEnabled="{Binding CanScan}"
-                                Padding="14,8" FontSize="12" />
-
-                        <Button Content="▶ 2. Iniciar Sincronização" 
-                                Command="{Binding StartSyncCommand}" 
-                                IsEnabled="{Binding CanSync}"
-                                Classes="accent"
-                                Padding="16,8" FontWeight="SemiBold" FontSize="12" />
-
-                        <Button Content="✕ Cancelar" 
-                                Command="{Binding CancelCommand}" 
-                                IsVisible="{Binding IsBusy}"
-                                Padding="12,8" FontSize="12" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="icon-text" Command="{Binding ScanCommand}" ToolTip.Tip="Analisar diferenças sem alterar nada (F5)">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <PathIcon Data="{StaticResource IconSearch}" Classes="small" />
+                                <TextBlock Text="Analisar" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="accent icon-text" Command="{Binding StartSyncCommand}" ToolTip.Tip="Revisar o plano e sincronizar (Ctrl+Enter)">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <PathIcon Data="{StaticResource IconPlay}" Classes="small" />
+                                <TextBlock Text="Sincronizar" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="icon-text" Command="{Binding CancelCommand}" IsVisible="{Binding IsBusy}" ToolTip.Tip="Cancelar (Esc)">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <PathIcon Data="{StaticResource IconClose}" Classes="small" />
+                                <TextBlock Text="Cancelar" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </Grid>
-
             </Grid>
         </Border>
 
-        <!-- 3. Metrics Summary Badges -->
-        <Grid Grid.Row="2" ColumnDefinitions="*,10,*,10,*,10,*" Margin="0,0,0,12">
-            
-            <!-- Novos -->
-            <Border Grid.Column="0" Background="{DynamicResource SystemChromeLowColor}" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="8" Padding="12,8">
-                <StackPanel Spacing="3">
-                    <TextBlock Text="Novos a Copiar" FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom">
-                        <TextBlock Text="{Binding NewCount}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AccentButtonBackground}" />
-                        <TextBlock Text="{Binding NewBytesFormatted}" FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}" VerticalAlignment="Center" />
+        <!-- 3. Avisos da análise -->
+        <Border Grid.Row="2" Classes="warning-banner" Margin="0,0,0,10" IsVisible="{Binding HasScanWarnings}">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                <ScrollViewer Grid.Column="1" MaxHeight="72" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding ScanWarnings}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,1" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- 4. Resumo (cartões clicáveis filtram a grade) -->
+        <Grid Grid.Row="3" ColumnDefinitions="*,10,*,10,*,10,*,10,*" Margin="0,0,0,10">
+            <Button Grid.Column="0" Classes="metric"
+                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.New}}"
+                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.New}">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconPlus}" Classes="small new" />
+                        <TextBlock Classes="caption" Text="Novos a copiar" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Classes="value new" Text="{Binding NewCount}" />
+                        <TextBlock Classes="caption" Text="{Binding NewBytesFormatted}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
                     </StackPanel>
                 </StackPanel>
-            </Border>
-
-            <!-- Idênticos -->
-            <Border Grid.Column="2" Background="{DynamicResource SystemChromeLowColor}" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="8" Padding="12,8">
-                <StackPanel Spacing="3">
-                    <TextBlock Text="Idênticos (Ignorados)" FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                    <TextBlock Text="{Binding IdenticalCount}" FontSize="18" FontWeight="Bold" />
-                </StackPanel>
-            </Border>
-
-            <!-- Conflitos -->
-            <Border Grid.Column="4" Background="{DynamicResource SystemChromeLowColor}" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="8" Padding="12,8">
-                <Grid ColumnDefinitions="*,Auto">
-                    <StackPanel Grid.Column="0" Spacing="3">
-                        <TextBlock Text="⚠️ Conflitos" FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                        <TextBlock Text="{Binding ConflictCount}" FontSize="18" FontWeight="Bold" Foreground="#D97706" />
+            </Button>
+            <Button Grid.Column="2" Classes="metric"
+                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Conflicts}}"
+                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Conflicts}">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconConflict}" Classes="small conflict" />
+                        <TextBlock Classes="caption" Text="Conflitos" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
-                        <Button Content="Todos p/ old/" Command="{Binding MarkAllConflictsAsReplaceCommand}" FontSize="10" Padding="4,2" ToolTip.Tip="Define todos os conflitos para Substituir (mover antigo p/ old)" />
-                        <Button Content="Todos Ignorar" Command="{Binding MarkAllConflictsAsIgnoreCommand}" FontSize="10" Padding="4,2" ToolTip.Tip="Define todos os conflitos para Ignorar" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Lixo / Órfãos -->
-            <Border Grid.Column="6" Background="{DynamicResource SystemChromeLowColor}" BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="8" Padding="12,8">
-                <StackPanel Spacing="3">
-                    <TextBlock Text="🗑️ Órfãos (Para o Lixo)" FontSize="11" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                    <TextBlock Text="{Binding TrashCount}" FontSize="18" FontWeight="Bold" Foreground="#DC2626" />
+                    <TextBlock Classes="value conflict" Text="{Binding ConflictCount}" />
                 </StackPanel>
-            </Border>
-
+            </Button>
+            <Button Grid.Column="4" Classes="metric"
+                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Orphans}}"
+                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Orphans}">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconTrash}" Classes="small orphan" />
+                        <TextBlock Classes="caption" Text="Órfãos (p/ lixo/)" />
+                    </StackPanel>
+                    <TextBlock Classes="value orphan" Text="{Binding TrashCount}" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="6" Classes="metric"
+                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Identical}}"
+                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Identical}">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconCheck}" Classes="small identical" />
+                        <TextBlock Classes="caption" Text="Idênticos" />
+                    </StackPanel>
+                    <TextBlock Classes="value identical" Text="{Binding IdenticalCount}" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="8" Classes="metric"
+                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Errors}}"
+                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Errors}">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconError}" Classes="small error" />
+                        <TextBlock Classes="caption" Text="Erros" />
+                    </StackPanel>
+                    <TextBlock Classes="value error" Text="{Binding ErrorCount}" />
+                </StackPanel>
+            </Button>
         </Grid>
 
-        <!-- 4. Tabs: File Preview Table & Logs -->
-        <TabControl Grid.Row="3" Margin="0,0,0,10">
-            
-            <!-- Tab 1: Preview DataGrid -->
-            <TabItem Header="📋 Prévia de Arquivos">
-                <Grid RowDefinitions="Auto,*" Margin="0,8,0,0">
-                    
-                    <!-- Filters bar -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
-                        <TextBlock Text="Filtrar:" VerticalAlignment="Center" FontSize="11.5" Foreground="{DynamicResource SystemBaseMediumColor}" Margin="0,0,4,0"/>
-                        <Button Content="Todos" Command="{Binding SetFilterCommand}" CommandParameter="Todos" FontSize="11" Padding="8,4" />
-                        <Button Content="Novos" Command="{Binding SetFilterCommand}" CommandParameter="Novos" FontSize="11" Padding="8,4" />
-                        <Button Content="Conflitos" Command="{Binding SetFilterCommand}" CommandParameter="Conflitos" FontSize="11" Padding="8,4" />
-                        <Button Content="Órfãos (Lixo)" Command="{Binding SetFilterCommand}" CommandParameter="Lixo" FontSize="11" Padding="8,4" />
-                        <Button Content="Idênticos" Command="{Binding SetFilterCommand}" CommandParameter="Identicos" FontSize="11" Padding="8,4" />
+        <!-- 5. Prévia e Log -->
+        <TabControl Grid.Row="4" Margin="0,0,0,8" Padding="0">
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <PathIcon Data="{StaticResource IconList}" Classes="small" />
+                        <TextBlock Text="Prévia" FontSize="14" />
                     </StackPanel>
+                </TabItem.Header>
+                <Grid RowDefinitions="Auto,*" Margin="0,8,0,0">
+                    <!-- Filtros e busca -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                        <WrapPanel ItemSpacing="6" LineSpacing="6" VerticalAlignment="Center">
+                            <Button Classes="chip" Content="Todos"
+                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.All}}"
+                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.All}" />
+                            <Button Classes="chip" Content="Novos"
+                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.New}}"
+                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.New}" />
+                            <Button Classes="chip" Content="Conflitos"
+                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Conflicts}}"
+                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Conflicts}" />
+                            <Button Classes="chip" Content="Órfãos"
+                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Orphans}}"
+                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Orphans}" />
+                            <Button Classes="chip" Content="Idênticos"
+                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Identical}}"
+                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Identical}" />
+                            <Button Classes="chip" Content="Erros"
+                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Errors}}"
+                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Errors}" />
+                            <DropDownButton Classes="chip" IsVisible="{Binding CanEditConflicts}" Margin="8,0,0,0"
+                                            ToolTip.Tip="Definir a decisão de todos os conflitos pendentes antes de sincronizar">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <PathIcon Data="{StaticResource IconConflict}" Classes="small conflict" />
+                                    <TextBlock Text="Decidir conflitos" />
+                                </StackPanel>
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                        <MenuItem Header="Mais recente vence (substitui só quando a origem é mais nova)" Command="{Binding MarkConflictsNewestWinsCommand}" />
+                                        <MenuItem Header="Substituir todos (versões atuais vão para old/)" Command="{Binding MarkAllConflictsAsReplaceCommand}" />
+                                        <MenuItem Header="Ignorar todos (manter destino)" Command="{Binding MarkAllConflictsAsIgnoreCommand}" />
+                                    </MenuFlyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
+                        </WrapPanel>
+                        <TextBox Grid.Column="1" Width="240" VerticalAlignment="Top" Text="{Binding SearchText}"
+                                 PlaceholderText="Buscar no caminho..." AutomationProperties.Name="Buscar no caminho">
+                            <TextBox.InnerLeftContent>
+                                <PathIcon Data="{StaticResource IconSearch}" Classes="small" Margin="8,0,0,0" Opacity="0.6" />
+                            </TextBox.InnerLeftContent>
+                        </TextBox>
+                    </Grid>
 
-                    <!-- DataGrid -->
-                    <DataGrid Grid.Row="1" ItemsSource="{Binding FilteredItems}" 
-                              AutoGenerateColumns="False" 
-                              IsReadOnly="True"
-                              GridLinesVisibility="Horizontal"
-                              BorderThickness="1"
-                              BorderBrush="{DynamicResource SystemBaseLowColor}"
-                              CornerRadius="6">
-                        <DataGrid.Columns>
-                            
-                            <DataGridTextColumn Header="Ação Programada" 
-                                                Binding="{Binding ActionDisplay}" 
-                                                Width="190" />
+                    <Panel Grid.Row="1">
+                        <DataGrid ItemsSource="{Binding FilteredItems}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="True"
+                                  GridLinesVisibility="Horizontal"
+                                  BorderThickness="1"
+                                  BorderBrush="{DynamicResource OsCardBorderBrush}"
+                                  CornerRadius="8">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="Ação" Width="190" SortMemberPath="ActionDisplay">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="models:SyncItem">
+                                            <StackPanel Orientation="Horizontal" Spacing="7" Margin="10,0" VerticalAlignment="Center"
+                                                        Classes.new="{Binding IsNew}" Classes.conflict="{Binding IsConflict}"
+                                                        Classes.orphan="{Binding IsOrphan}" Classes.identical="{Binding IsIdentical}">
+                                                <Panel Width="13" Height="13">
+                                                    <PathIcon Data="{StaticResource IconPlus}" Classes="small" IsVisible="{Binding IsNew}" />
+                                                    <PathIcon Data="{StaticResource IconConflict}" Classes="small" IsVisible="{Binding IsConflict}" />
+                                                    <PathIcon Data="{StaticResource IconTrash}" Classes="small" IsVisible="{Binding IsOrphan}" />
+                                                    <PathIcon Data="{StaticResource IconCheck}" Classes="small" IsVisible="{Binding IsIdentical}" />
+                                                </Panel>
+                                                <TextBlock Text="{Binding ActionDisplay}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Caminho Relativo" 
-                                                Binding="{Binding RelativePath}" 
-                                                Width="*" />
+                                <DataGridTextColumn Header="Caminho relativo" Binding="{Binding RelativePath}" Width="*" MinWidth="200" />
 
-                            <DataGridTextColumn Header="Tamanho Origem" 
-                                                Binding="{Binding FormattedSourceSize}" 
-                                                Width="110" />
+                                <DataGridTemplateColumn Header="Decisão" Width="120" SortMemberPath="ResolutionIndex">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="models:SyncItem">
+                                            <ComboBox IsVisible="{Binding IsConflict}" IsEnabled="{Binding !IsProcessed}"
+                                                      SelectedIndex="{Binding ResolutionIndex, Mode=TwoWay}"
+                                                      HorizontalAlignment="Stretch" Margin="4,2" FontSize="12" MinHeight="26" Padding="8,2">
+                                                <ComboBoxItem Content="Perguntar" />
+                                                <ComboBoxItem Content="Substituir" />
+                                                <ComboBoxItem Content="Ignorar" />
+                                            </ComboBox>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Tamanho Destino" 
-                                                Binding="{Binding FormattedDestinationSize}" 
-                                                Width="110" />
+                                <DataGridTextColumn Header="Tam. orig." Binding="{Binding FormattedSourceSize}" SortMemberPath="SourceSize" Width="92" />
+                                <DataGridTextColumn Header="Tam. dest." Binding="{Binding FormattedDestinationSize}" SortMemberPath="DestinationSize" Width="92" />
+                                <DataGridTextColumn Header="Modif. origem" Binding="{Binding ShortSourceDate}" SortMemberPath="SourceModifiedUtc" Width="128" />
+                                <DataGridTextColumn Header="Modif. destino" Binding="{Binding ShortDestinationDate}" SortMemberPath="DestinationModifiedUtc" Width="128" />
 
-                            <DataGridTextColumn Header="Modificação Origem" 
-                                                Binding="{Binding FormattedSourceDate}" 
-                                                Width="150" />
+                                <DataGridTemplateColumn Header="Status" Width="160" SortMemberPath="StatusMessage">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="models:SyncItem">
+                                            <TextBlock Text="{Binding StatusMessage}" Classes.error="{Binding HasError}"
+                                                       Margin="10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding StatusMessage}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
 
-                            <DataGridTextColumn Header="Status / Progresso" 
-                                                Binding="{Binding StatusMessage}" 
-                                                Width="170" />
-
-                        </DataGrid.Columns>
-                    </DataGrid>
-
+                        <TextBlock Text="{Binding EmptyStateText}" IsVisible="{Binding IsEmptyStateVisible}"
+                                   Classes="subtle" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420" IsHitTestVisible="False" />
+                    </Panel>
                 </Grid>
             </TabItem>
 
-            <!-- Tab 2: Logs -->
-            <TabItem Header="📜 Registro de Operações (Log)">
-                <ListBox ItemsSource="{Binding Logs}" 
-                         Margin="0,8,0,0"
-                         FontFamily="Consolas, Cascadia Code, monospace" 
-                         FontSize="11.5"
-                         BorderThickness="1"
-                         BorderBrush="{DynamicResource SystemBaseLowColor}"
-                         CornerRadius="6" />
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <PathIcon Data="{StaticResource IconLog}" Classes="small" />
+                        <TextBlock Text="Registro" FontSize="14" />
+                    </StackPanel>
+                </TabItem.Header>
+                <Border Classes="card" Margin="0,8,0,0" Padding="4">
+                    <ListBox ItemsSource="{Binding Logs}" Background="Transparent"
+                             FontFamily="Cascadia Mono, Consolas, DejaVu Sans Mono, monospace" FontSize="12">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LogEntry">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <TextBlock Text="{Binding Time}" Classes="subtle" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap"
+                                               Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
             </TabItem>
-
         </TabControl>
 
-        <!-- 5. Real-Time Progress Panel -->
-        <Border Grid.Row="4" Background="{DynamicResource SystemChromeLowColor}" 
-                BorderBrush="{DynamicResource SystemBaseLowColor}" BorderThickness="1" 
-                CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
+        <!-- 6. Progresso (visível só durante operações) -->
+        <Border Grid.Row="5" Classes="card" Padding="12,10" Margin="0,0,0,8" IsVisible="{Binding IsBusy}">
             <StackPanel Spacing="6">
                 <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0" Text="{Binding CurrentOperationText}" 
-                               FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" />
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
-                        <TextBlock Text="{Binding ProcessedFilesText}" FontSize="12" Foreground="{DynamicResource SystemBaseMediumColor}" />
-                        <TextBlock Text="{Binding SpeedFormatted}" FontSize="12" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding EtaFormatted}" FontSize="12" Foreground="{DynamicResource SystemBaseMediumColor}" />
+                    <TextBlock Text="{Binding CurrentOperationText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14">
+                        <TextBlock Text="{Binding ProcessedFilesText}" Classes="subtle" />
+                        <TextBlock Text="{Binding SpeedFormatted}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding EtaFormatted}" Classes="subtle" ToolTip.Tip="Tempo restante estimado" />
                     </StackPanel>
                 </Grid>
-                
-                <ProgressBar Value="{Binding OverallProgress}" Minimum="0" Maximum="100" Height="8" CornerRadius="4" />
+                <ProgressBar Value="{Binding OverallProgress}" IsIndeterminate="{Binding IsProgressIndeterminate}"
+                             Minimum="0" Maximum="100" Height="6" CornerRadius="3" />
             </StackPanel>
         </Border>
 
-        <!-- 6. Bottom Bar & Quick Folder Access -->
-        <Grid Grid.Row="5" ColumnDefinitions="*,Auto">
-            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" 
-                       FontSize="12" Foreground="{DynamicResource SystemBaseMediumColor}" 
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <!-- 7. Barra de status e acesso às pastas de segurança -->
+        <Grid Grid.Row="6" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <TextBlock Text="{Binding StatusMessage}" Classes="subtle" FontSize="12"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StatusMessage}" />
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <Button Content="↩ Restaurar de lixo/" Command="{Binding RestoreTrashCommand}" 
-                        ToolTip.Tip="Restaura todos os arquivos da pasta lixo/ para seus locais originais"
-                        FontSize="11.5" Padding="10,5" />
-                <Button Content="Abrir destino/lixo/ ↗" Command="{Binding OpenTrashFolderCommand}" 
-                        FontSize="11.5" Padding="10,5" />
-                <Button Content="Abrir destino/old/ ↗" Command="{Binding OpenOldFolderCommand}" 
-                        FontSize="11.5" Padding="10,5" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                <Button Classes="ghost" Command="{Binding ExportReportCommand}" ToolTip.Tip="Exportar a análise/resultado em CSV">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconExport}" Classes="small" />
+                        <TextBlock Text="Exportar CSV" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="ghost" Command="{Binding RestoreTrashCommand}" ToolTip.Tip="Escolher arquivos de lixo/ para devolver ao local original">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconRestore}" Classes="small" />
+                        <TextBlock Text="Restaurar de lixo/" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="ghost" Command="{Binding OpenTrashFolderCommand}" ToolTip.Tip="Abrir destino/lixo/">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconTrash}" Classes="small" />
+                        <TextBlock Text="lixo/" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="ghost" Command="{Binding OpenOldFolderCommand}" ToolTip.Tip="Abrir destino/old/ (versões substituídas)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconHistory}" Classes="small" />
+                        <TextBlock Text="old/" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Grid>
-
     </Grid>
 </Window>

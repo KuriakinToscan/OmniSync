@@ -43,6 +43,27 @@ public partial class ConflictDialogViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Indica se a versão da Origem é a mais recente.
+    /// </summary>
+    public bool IsSourceNewer => Item.ConflictDirection == ConflictDirection.SourceNewer;
+
+    /// <summary>
+    /// Indica se a versão do Destino é a mais recente.
+    /// </summary>
+    public bool IsDestinationNewer => Item.ConflictDirection == ConflictDirection.DestinationNewer;
+
+    /// <summary>
+    /// Frase que orienta a decisão conforme o lado mais recente.
+    /// </summary>
+    public string DirectionHint => Item.ConflictDirection switch
+    {
+        ConflictDirection.SourceNewer => "A origem foi modificada depois do destino. Substituir é o caminho usual.",
+        ConflictDirection.DestinationNewer => "Atenção: o destino é mais recente que a origem. Substituir trocaria uma versão mais nova por uma mais antiga.",
+        ConflictDirection.SameTime => "As datas coincidem, mas o conteúdo difere.",
+        _ => "O arquivo existe nos dois lados com conteúdo diferente."
+    };
+
+    /// <summary>
     /// Comando acionado pelo botão "Substituir (Mover p/ old/)".
     /// Define o resultado como <see cref="ConflictResolution.Replace"/> e fecha o diálogo.
     /// </summary>

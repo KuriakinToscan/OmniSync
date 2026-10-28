@@ -1,0 +1,47 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Paleta semântica do OmniSync com variantes para tema claro e escuro.
+         Cores de estado escolhidas para contraste mínimo de 4,5:1 sobre o fundo dos cartões. -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="OsWindowBrush" Color="#F4F5F7" />
+            <SolidColorBrush x:Key="OsCardBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="OsCardHoverBrush" Color="#F8F9FB" />
+            <SolidColorBrush x:Key="OsCardBorderBrush" Color="#E2E5EA" />
+            <SolidColorBrush x:Key="OsSubtleTextBrush" Color="#5B6270" />
+            <SolidColorBrush x:Key="OsChipActiveBrush" Color="#DCE7FD" />
+            <SolidColorBrush x:Key="OsChipActiveTextBrush" Color="#1D4ED8" />
+            <SolidColorBrush x:Key="OsNewBrush" Color="#15803D" />
+            <SolidColorBrush x:Key="OsConflictBrush" Color="#B45309" />
+            <SolidColorBrush x:Key="OsOrphanBrush" Color="#B91C1C" />
+            <SolidColorBrush x:Key="OsIdenticalBrush" Color="#6B7280" />
+            <SolidColorBrush x:Key="OsErrorBrush" Color="#B91C1C" />
+            <SolidColorBrush x:Key="OsWarningBgBrush" Color="#FEF3C7" />
+            <SolidColorBrush x:Key="OsWarningBorderBrush" Color="#F59E0B" />
+            <SolidColorBrush x:Key="OsWarningTextBrush" Color="#78350F" />
+            <SolidColorBrush x:Key="OsDangerBgBrush" Color="#FEE2E2" />
+            <SolidColorBrush x:Key="OsDangerBorderBrush" Color="#EF4444" />
+            <SolidColorBrush x:Key="OsDangerTextBrush" Color="#7F1D1D" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="OsWindowBrush" Color="#1B1C20" />
+            <SolidColorBrush x:Key="OsCardBrush" Color="#25272C" />
+            <SolidColorBrush x:Key="OsCardHoverBrush" Color="#2C2F35" />
+            <SolidColorBrush x:Key="OsCardBorderBrush" Color="#363940" />
+            <SolidColorBrush x:Key="OsSubtleTextBrush" Color="#A4AAB4" />
+            <SolidColorBrush x:Key="OsChipActiveBrush" Color="#1E3A8A" />
+            <SolidColorBrush x:Key="OsChipActiveTextBrush" Color="#DBEAFE" />
+            <SolidColorBrush x:Key="OsNewBrush" Color="#4ADE80" />
+            <SolidColorBrush x:Key="OsConflictBrush" Color="#FBBF24" />
+            <SolidColorBrush x:Key="OsOrphanBrush" Color="#F87171" />
+            <SolidColorBrush x:Key="OsIdenticalBrush" Color="#9CA3AF" />
+            <SolidColorBrush x:Key="OsErrorBrush" Color="#F87171" />
+            <SolidColorBrush x:Key="OsWarningBgBrush" Color="#3A2E12" />
+            <SolidColorBrush x:Key="OsWarningBorderBrush" Color="#B7791F" />
+            <SolidColorBrush x:Key="OsWarningTextBrush" Color="#FDE68A" />
+            <SolidColorBrush x:Key="OsDangerBgBrush" Color="#3B1717" />
+            <SolidColorBrush x:Key="OsDangerBorderBrush" Color="#DC2626" />
+            <SolidColorBrush x:Key="OsDangerTextBrush" Color="#FECACA" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

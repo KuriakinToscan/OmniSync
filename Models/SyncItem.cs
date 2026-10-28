@@ -62,24 +62,79 @@ public partial class SyncItem : ObservableObject
     private string _statusMessage = "Pendente";
 
     /// <summary>
-    /// Indica se este item já foi processado na sessão atual de sincronização.
+    /// Indica se este item já foi processado com sucesso na sessão atual de sincronização.
     /// </summary>
     [ObservableProperty]
     private bool _isProcessed = false;
 
     /// <summary>
-    /// Texto amigável exibido na coluna "Ação Programada" da tabela de prévia.
+    /// Indica se a última tentativa de processar este item terminou em erro.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasError = false;
+
+    /// <summary>Indica se o item é um arquivo novo (somente na Origem).</summary>
+    public bool IsNew => ActionType == SyncActionType.New;
+
+    /// <summary>Indica se o item é idêntico nos dois lados.</summary>
+    public bool IsIdentical => ActionType == SyncActionType.Identical;
+
+    /// <summary>Indica se o item está em conflito (mesmo caminho, conteúdo diferente).</summary>
+    public bool IsConflict => ActionType == SyncActionType.Conflict;
+
+    /// <summary>Indica se o item é órfão (somente no Destino).</summary>
+    public bool IsOrphan => ActionType == SyncActionType.OrphanTrash;
+
+    /// <summary>
+    /// Indica qual lado possui a versão modificada mais recentemente em um conflito.
+    /// </summary>
+    public ConflictDirection ConflictDirection
+    {
+        get
+        {
+            if (ActionType != SyncActionType.Conflict || !SourceModifiedUtc.HasValue || !DestinationModifiedUtc.HasValue)
+            {
+                return ConflictDirection.None;
+            }
+
+            var delta = (SourceModifiedUtc.Value - DestinationModifiedUtc.Value).TotalSeconds;
+            if (Math.Abs(delta) <= 2.0) return ConflictDirection.SameTime;
+            return delta > 0 ? ConflictDirection.SourceNewer : ConflictDirection.DestinationNewer;
+        }
+    }
+
+    /// <summary>
+    /// Índice da decisão de conflito para o seletor da grade: 0 = Perguntar, 1 = Substituir, 2 = Ignorar.
+    /// </summary>
+    public int ResolutionIndex
+    {
+        get => Resolution switch
+        {
+            ConflictResolution.Replace => 1,
+            ConflictResolution.Ignore => 2,
+            _ => 0
+        };
+        set => Resolution = value switch
+        {
+            1 => ConflictResolution.Replace,
+            2 => ConflictResolution.Ignore,
+            _ => ConflictResolution.AskUser
+        };
+    }
+
+    /// <summary>
+    /// Texto amigável exibido na coluna "Ação" da tabela de prévia.
     /// </summary>
     public string ActionDisplay => ActionType switch
     {
-        SyncActionType.Identical => "Idêntico (Ignorar)",
-        SyncActionType.New => "Novo (Copiar)",
-        SyncActionType.OrphanTrash => "Órfão (Mover p/ Lixo)",
-        SyncActionType.Conflict => Resolution switch
+        SyncActionType.Identical => "Idêntico",
+        SyncActionType.New => "Novo (copiar)",
+        SyncActionType.OrphanTrash => "Órfão (p/ lixo/)",
+        SyncActionType.Conflict => ConflictDirection switch
         {
-            ConflictResolution.Replace => "Conflito (Substituir -> old/)",
-            ConflictResolution.Ignore => "Conflito (Ignorar)",
-            _ => "⚠️ Conflito (Aguardando)"
+            ConflictDirection.SourceNewer => "Conflito · origem nova",
+            ConflictDirection.DestinationNewer => "Conflito · destino novo",
+            _ => "Conflito"
         },
         _ => "Desconhecido"
     };
@@ -92,7 +147,7 @@ public partial class SyncItem : ObservableObject
     /// <summary>
     /// Tamanho do arquivo no Destino formatado em unidades legíveis (B, KB, MB, GB, TB).
     /// </summary>
-    public string FormattedDestinationSize => DestinationFullPath != null ? FormatBytes(DestinationSize) : "—";
+    public string FormattedDestinationSize => DestinationModifiedUtc.HasValue ? FormatBytes(DestinationSize) : "—";
 
     /// <summary>
     /// Data de modificação na Origem convertida para o fuso horário local e formatada.
@@ -106,6 +161,20 @@ public partial class SyncItem : ObservableObject
     /// </summary>
     public string FormattedDestinationDate => DestinationModifiedUtc.HasValue
         ? DestinationModifiedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+        : "—";
+
+    /// <summary>
+    /// Data de modificação na Origem em formato curto para a grade (sem segundos).
+    /// </summary>
+    public string ShortSourceDate => SourceModifiedUtc.HasValue
+        ? SourceModifiedUtc.Value.ToLocalTime().ToString("dd/MM/yy HH:mm")
+        : "—";
+
+    /// <summary>
+    /// Data de modificação no Destino em formato curto para a grade (sem segundos).
+    /// </summary>
+    public string ShortDestinationDate => DestinationModifiedUtc.HasValue
+        ? DestinationModifiedUtc.Value.ToLocalTime().ToString("dd/MM/yy HH:mm")
         : "—";
 
     /// <summary>
@@ -129,10 +198,10 @@ public partial class SyncItem : ObservableObject
     }
 
     /// <summary>
-    /// Notifica a interface gráfica para atualizar <see cref="ActionDisplay"/> sempre que <see cref="Resolution"/> mudar.
+    /// Notifica a interface gráfica para atualizar as propriedades derivadas sempre que <see cref="Resolution"/> mudar.
     /// </summary>
     partial void OnResolutionChanged(ConflictResolution value)
     {
-        OnPropertyChanged(nameof(ActionDisplay));
+        OnPropertyChanged(nameof(ResolutionIndex));
     }
 }

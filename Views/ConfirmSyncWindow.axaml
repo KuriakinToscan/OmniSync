@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OmniSync.ViewModels"
+        x:Class="OmniSync.Views.ConfirmSyncWindow"
+        x:DataType="vm:ConfirmSyncViewModel"
+        Icon="/Assets/omnisync.ico"
+        Title="Confirmar sincronização"
+        Width="560" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+
+    <StackPanel Margin="24,20" Spacing="14">
+        <StackPanel Spacing="2">
+            <TextBlock Text="Revise antes de sincronizar" FontSize="18" FontWeight="Bold" />
+            <TextBlock Classes="subtle" FontSize="12" TextWrapping="Wrap">
+                <Run Text="Destino: " /><Run Text="{Binding Summary.DestinationPath}" FontWeight="SemiBold" />
+            </TextBlock>
+        </StackPanel>
+
+        <Border Classes="card" Padding="14,10">
+            <Grid ColumnDefinitions="Auto,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                <PathIcon Grid.Row="0" Data="{StaticResource IconPlus}" Classes="small new" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Summary.NewCount}" FontWeight="Bold" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="0" Grid.Column="2">
+                    <Run Text="arquivos novos serão copiados (" /><Run Text="{Binding Summary.NewBytesFormatted}" /><Run Text=")" />
+                </TextBlock>
+
+                <PathIcon Grid.Row="1" Data="{StaticResource IconConflict}" Classes="small conflict" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary.ReplaceCount}" FontWeight="Bold" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="conflitos serão substituídos (versão atual vai para old/)" TextWrapping="Wrap" />
+
+                <PathIcon Grid.Row="2" Data="{StaticResource IconCheck}" Classes="small identical" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Summary.IgnoreCount}" FontWeight="Bold" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="conflitos serão ignorados (destino mantido)" />
+
+                <PathIcon Grid.Row="3" Data="{StaticResource IconWarning}" Classes="small warning" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Summary.AskCount}" FontWeight="Bold" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="3" Grid.Column="2" Text="conflitos sem decisão (será perguntado durante a execução)" TextWrapping="Wrap" />
+
+                <PathIcon Grid.Row="4" Data="{StaticResource IconTrash}" Classes="small orphan" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Summary.OrphanCount}" FontWeight="Bold" HorizontalAlignment="Right" />
+                <TextBlock Grid.Row="4" Grid.Column="2" Text="arquivos órfãos serão movidos para lixo/ (nada é apagado)" TextWrapping="Wrap" />
+            </Grid>
+        </Border>
+
+        <Border Classes="warning-banner" IsVisible="{Binding Summary.HasWarnings}">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Avisos da análise" FontWeight="SemiBold" FontSize="12" />
+                <ItemsControl ItemsSource="{Binding Summary.Warnings}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,1" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <Border Classes="danger-banner" IsVisible="{Binding Summary.IsMassOrphan}">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <PathIcon Data="{StaticResource IconWarning}" />
+                    <TextBlock Text="Grande parte do destino será movida para lixo/" FontWeight="Bold" />
+                </StackPanel>
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Text="Isso costuma indicar que o destino escolhido não é o par correto desta origem. Confira o caminho acima." />
+                <CheckBox IsChecked="{Binding MassOrphanAcknowledged}">
+                    <TextBlock Text="{Binding MassOrphanText}" TextWrapping="Wrap" />
+                </CheckBox>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="Cancelar" Command="{Binding CancelCommand}" Padding="16,8" IsCancel="True" />
+            <Button Content="Sincronizar" Command="{Binding ConfirmCommand}" Classes="accent" Padding="18,8" FontWeight="SemiBold" />
+        </StackPanel>
+    </StackPanel>
+</Window>
