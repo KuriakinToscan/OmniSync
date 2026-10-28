@@ -1,0 +1,30 @@
+## Diretórios de compilação e publicação do .NET
+[Bb]in/
+[Oo]bj/
+[Pp]ublish/
+out/
+TestResults/
+
+## Arquivos temporários e de diagnóstico em tempo de execução
+*.log
+crash.log
+selftest.log
+SelfTestTemp_*/
+Restaurar G_lixo.bat
+Publicar no GitHub.bat
+
+## Visual Studio / Rider / VS Code / Antigravity
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Sistemas Operacionais (Windows / Linux / macOS)
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*~
