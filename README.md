@@ -20,6 +20,18 @@ Diferente de ferramentas tradicionais que apagam ou sobrescrevem arquivos irreve
 5. **Subpasta Automática por Nome da Origem**: Ao selecionar uma pasta de origem (ex.: `E:\Projetos`) e apontar para a raiz de outro drive (ex.: `G:\`), o OmniSync direciona automaticamente a sincronização para `G:\Projetos`, protegendo as demais pastas do disco de destino.
 6. **Escrita atômica e confirmação prévia**: cada cópia é gravada em arquivo temporário e renomeada ao final (cancelamentos e quedas de rede não deixam arquivos truncados). Antes de executar, uma janela resume o plano e exige confirmação explícita quando grande parte do destino iria para `lixo/`.
 7. **Auditoria**: log diário completo em arquivo e exportação do plano/resultado em CSV.
+8. **Pares salvos**: cada combinação de origem, destino e opções fica salva na barra lateral, com o estado da última execução. Trocar de par carrega a configuração e descarta o plano anterior.
+
+### Interface
+
+A janela segue o fluxo da sincronização em quatro telas:
+
+1. **Configuração do par**: origem, destino e opções; a análise só lê as pastas.
+2. **Plano analisado**: barra proporcional com filtros por categoria, árvore de **pastas com alterações**, lista de arquivos e painel de detalhes, onde cada conflito é decidido sem diálogo. A barra inferior resume o que vai acontecer.
+3. **Execução**: progresso total e por fase (cópias, conflitos, `lixo/`), velocidade, tempo restante e registro com filtro de avisos e erros.
+4. **Resultado**: balanço, falhas com o motivo, nova tentativa e atalhos para `lixo/`, `old/` e o relatório CSV.
+
+Em janelas com menos de 1.240 px de largura, a árvore de pastas é ocultada para preservar a lista e o painel de detalhes.
 
 ---
 
@@ -74,6 +86,7 @@ OmniSync/
 │   ├── SyncActionType.cs       # Tipos de ação, resolução e direção do conflito
 │   ├── SyncContracts.cs        # Opções/resultado da varredura, atualizações de item, balanço, lixo/
 │   ├── SyncItem.cs             # Representação observável de cada arquivo analisado
+│   ├── SyncProfile.cs          # Par salvo: origem, destino, opções e última execução
 │   └── SyncProgressReport.cs   # Telemetria de progresso, velocidade (MB/s) e ETA
 ├── Services/                   # Regras de negócio, sem dependência da interface
 │   ├── ISyncEngine.cs          # Interface do motor de sincronização
@@ -81,17 +94,20 @@ OmniSync/
 │   ├── RestoreService.cs       # Restauração não destrutiva de lixo/
 │   ├── PathHelper.cs           # Comparação de caminhos por SO e movimentações seguras
 │   ├── FileLogService.cs       # Log diário em arquivo
-│   ├── SettingsService.cs      # Preferências do usuário (JSON)
+│   ├── SettingsService.cs      # Pares salvos (JSON) e migração do formato 1.1
 │   ├── ReportExporter.cs       # Exportação CSV
 │   └── AppPaths.cs             # Pasta de dados por usuário
 ├── ViewModels/                 # Camada MVVM de apresentação e comandos
-│   ├── MainViewModel.cs        # Tela principal: análise, confirmação, execução, filtros, restauração
+│   ├── MainViewModel.cs        # Pares, telas, análise, confirmação, execução, filtros, restauração
+│   ├── ProfileItemViewModel.cs # Item da barra lateral de pares
+│   ├── FolderTree.cs           # Árvore "pastas com alterações"
 │   ├── ConflictDialogViewModel.cs / ConfirmSyncViewModel.cs / RestoreViewModel.cs
 │   ├── UiBatchQueue.cs         # Entrega em lote de log e status à thread de UI
 │   └── UiModels.cs             # Filtros, entradas de log e resumo do plano
 ├── Views/                      # Interfaces gráficas declarativas (Avalonia XAML)
 │   ├── MainWindow.axaml(.cs)   # Janela principal
-│   ├── ConflictDialogWindow / ConfirmSyncWindow / RestoreWindow
+│   ├── ConflictDialogWindow / ConfirmSyncWindow / RestoreWindow / MessageDialog
+│   ├── ProportionBar.cs        # Barra proporcional do resumo do plano
 │   └── Converters.cs
 ├── Styles/                     # Paleta claro/escuro, ícones vetoriais e estilos
 ├── Tests/                      # Testes automatizados (xUnit)

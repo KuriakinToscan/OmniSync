@@ -3,27 +3,118 @@
 
     <Style Selector="Window">
         <Setter Property="Background" Value="{DynamicResource OsWindowBrush}" />
+        <Setter Property="FontSize" Value="13" />
     </Style>
 
-    <!-- Texto secundário -->
+    <!-- Texto -->
     <Style Selector="TextBlock.subtle">
         <Setter Property="Foreground" Value="{DynamicResource OsSubtleTextBrush}" />
     </Style>
     <Style Selector="TextBlock.caption">
-        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="Foreground" Value="{DynamicResource OsSubtleTextBrush}" />
     </Style>
     <Style Selector="TextBlock.section">
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <Style Selector="TextBlock.eyebrow">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="LetterSpacing" Value="0.6" />
+        <Setter Property="Foreground" Value="{DynamicResource OsSubtleTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.eyebrow.accent">
+        <Setter Property="Foreground" Value="{DynamicResource OsAccentTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="TextBox.mono">
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="TextBlock.title">
+        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="-0.4" />
+    </Style>
+    <Style Selector="TextBlock.headline">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="TextBlock.number">
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
 
-    <!-- Cartões -->
+    <!-- Superfícies -->
     <Style Selector="Border.card">
         <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="Border.inset">
+        <Setter Property="Background" Value="{DynamicResource OsInsetBrush}" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Border.appbar">
+        <Setter Property="Background" Value="{DynamicResource OsSidebarBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <Style Selector="Border.sidebar">
+        <Setter Property="Background" Value="{DynamicResource OsSidebarBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,1,0" />
+    </Style>
+    <Style Selector="Border.tag">
+        <Setter Property="Background" Value="{DynamicResource OsTagBrush}" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.tag TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+
+    <!-- Marcadores de categoria -->
+    <Style Selector="Border.dot">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Height" Value="8" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource OsIdleBrush}" />
+    </Style>
+    <Style Selector="Border.swatch">
+        <Setter Property="Width" Value="10" />
+        <Setter Property="Height" Value="10" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.new">
+        <Setter Property="Background" Value="{DynamicResource OsNewBrush}" />
+    </Style>
+    <Style Selector="Border.conflict">
+        <Setter Property="Background" Value="{DynamicResource OsConflictBrush}" />
+    </Style>
+    <Style Selector="Border.orphan">
+        <Setter Property="Background" Value="{DynamicResource OsOrphanBrush}" />
+    </Style>
+    <Style Selector="Border.identical">
+        <Setter Property="Background" Value="{DynamicResource OsIdleBrush}" />
+    </Style>
+    <Style Selector="Border.error">
+        <Setter Property="Background" Value="{DynamicResource OsErrorBrush}" />
+    </Style>
+    <Style Selector="Border.success">
+        <Setter Property="Background" Value="{DynamicResource OsSuccessBrush}" />
+    </Style>
+    <Style Selector="Border.dot.running">
+        <Setter Property="Background" Value="{DynamicResource OsAccentBrush}" />
     </Style>
 
     <!-- Ícones -->
@@ -36,7 +127,7 @@
         <Setter Property="Height" Value="13" />
     </Style>
 
-    <!-- Cores semânticas por tipo de ação -->
+    <!-- Cores semânticas de texto e ícones por tipo de ação -->
     <Style Selector=":is(Control).new">
         <Setter Property="TextElement.Foreground" Value="{DynamicResource OsNewBrush}" />
     </Style>
@@ -53,60 +144,223 @@
         <Setter Property="TextElement.Foreground" Value="{DynamicResource OsErrorBrush}" />
     </Style>
     <Style Selector=":is(Control).warning">
-        <Setter Property="TextElement.Foreground" Value="{DynamicResource OsConflictBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource OsConflictTextBrush}" />
+    </Style>
+    <Style Selector=":is(Control).accent-text">
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource OsAccentTextBrush}" />
     </Style>
 
-    <!-- Botões de filtro (chips) -->
+    <!-- Botões -->
+    <Style Selector="Button.secondary, DropDownButton.secondary">
+        <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="Button.primary">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="20,0" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="Button.primary.large">
+        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="Padding" Value="28,0" />
+        <Setter Property="FontSize" Value="15" />
+    </Style>
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.ghost:disabled /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.link">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0,2" />
+        <Setter Property="Foreground" Value="{DynamicResource OsAccentTextBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource OsAccentBrush}" />
+    </Style>
+    <Style Selector="Button.danger-text">
+        <Setter Property="Foreground" Value="{DynamicResource OsErrorBrush}" />
+    </Style>
+    <Style Selector="Button.icon-only">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <!-- Filtros de categoria do resumo -->
+    <Style Selector="Button.category">
+        <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.category:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource OsCardHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
+    </Style>
+    <Style Selector="Button.category.active /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource OsAccentSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsAccentBrush}" />
+    </Style>
+    <Style Selector="Button.category TextBlock.count">
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <!-- Chips (registro da execução) -->
     <Style Selector=":is(Button).chip">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
-        <Setter Property="CornerRadius" Value="14" />
-        <Setter Property="Padding" Value="11,4" />
+        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="FontSize" Value="12" />
     </Style>
-    <Style Selector="Button.chip.active">
-        <Setter Property="Background" Value="{DynamicResource OsChipActiveBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource OsChipActiveBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource OsChipActiveTextBrush}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
     <Style Selector="Button.chip.active /template/ ContentPresenter">
-        <Setter Property="Background" Value="{DynamicResource OsChipActiveBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource OsChipActiveTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource OsAccentSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsAccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource OsAccentTextBrush}" />
     </Style>
 
-    <!-- Cartões de métrica clicáveis -->
-    <Style Selector="Button.metric">
+    <!-- Cartões de próximo passo -->
+    <Style Selector="Button.tile">
         <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="Padding" Value="16,14" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
     </Style>
-    <Style Selector="Button.metric:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.tile:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource OsCardHoverBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
-    </Style>
-    <Style Selector="Button.metric.active /template/ ContentPresenter">
-        <Setter Property="BorderBrush" Value="{DynamicResource OsChipActiveTextBrush}" />
-    </Style>
-    <Style Selector="Button.metric TextBlock.value">
-        <Setter Property="FontSize" Value="20" />
-        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsAccentBrush}" />
     </Style>
 
-    <!-- Botão com ícone e texto -->
-    <Style Selector="Button.icon-text">
-        <Setter Property="Padding" Value="12,7" />
-    </Style>
-    <Style Selector="Button.ghost">
+    <!-- Campo de nome do par no cabeçalho -->
+    <Style Selector="TextBox.inline-edit">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.inline-edit:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource OsInsetBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <!-- Barra lateral de pares -->
+    <Style Selector="ListBox.profiles">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.profiles ListBoxItem">
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Margin" Value="0,1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="ListBox.profiles ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource OsAccentSoftBrush}" />
+    </Style>
+    <Style Selector="ListBox.profiles ListBoxItem:selected:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource OsAccentSoftBrush}" />
+    </Style>
+    <Style Selector="ListBox.profiles ListBoxItem:selected TextBlock.name">
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Registro -->
+    <Style Selector="ListBox.log ListBoxItem">
+        <Setter Property="Padding" Value="16,5" />
+        <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <!-- Janela estreita: a árvore de pastas cede espaço à lista e ao painel de detalhes -->
+    <Style Selector="Window.compact DockPanel#FolderPane">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <!-- Árvore de pastas -->
+    <Style Selector="TreeView.folders TreeViewItem">
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="TreeView.folders TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource OsAccentSoftBrush}" />
+    </Style>
+
+    <!-- Opções de decisão no painel de detalhes -->
+    <Style Selector="RadioButton.option">
+        <Setter Property="Padding" Value="8,0,0,0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Border.option-card">
+        <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="10,6" />
+    </Style>
+    <Style Selector="Border.option-card.checked">
+        <Setter Property="BorderBrush" Value="{DynamicResource OsAccentBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+        <Setter Property="Padding" Value="9,5" />
+    </Style>
+    <Style Selector="Border.side-card">
+        <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource OsCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="12,10" />
+    </Style>
+    <Style Selector="Border.side-card.newer">
+        <Setter Property="BorderBrush" Value="{DynamicResource OsNewBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+        <Setter Property="Padding" Value="11,9" />
+    </Style>
+    <Style Selector="Border.badge">
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="9,3" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Background" Value="{DynamicResource OsTagBrush}" />
+    </Style>
+    <Style Selector="Border.badge TextBlock">
         <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Border.badge.conflict-soft">
+        <Setter Property="Background" Value="{DynamicResource OsConflictSoftBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource OsConflictTextBrush}" />
     </Style>
 
     <!-- Faixas de aviso e perigo -->
@@ -122,15 +376,14 @@
         <Setter Property="Background" Value="{DynamicResource OsDangerBgBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource OsDangerBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="14,12" />
         <Setter Property="TextElement.Foreground" Value="{DynamicResource OsDangerTextBrush}" />
     </Style>
-    <Style Selector="Border.badge">
+    <Style Selector="Border.danger-tile">
+        <Setter Property="Background" Value="{DynamicResource OsDangerBgBrush}" />
         <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Padding" Value="8,2" />
-        <Setter Property="Background" Value="{DynamicResource OsChipActiveBrush}" />
-        <Setter Property="TextElement.Foreground" Value="{DynamicResource OsChipActiveTextBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource OsDangerTextBrush}" />
     </Style>
 
     <!-- Grade -->
@@ -139,8 +392,16 @@
     </Style>
     <Style Selector="DataGridCell">
         <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="MinHeight" Value="36" />
     </Style>
     <Style Selector="DataGridColumnHeader">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource OsSubtleTextBrush}" />
+    </Style>
+    <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource OsAccentSoftBrush}" />
+        <Setter Property="Opacity" Value="1" />
     </Style>
 </Styles>

@@ -4,46 +4,56 @@
         x:Class="OmniSync.Views.ConfirmSyncWindow"
         x:DataType="vm:ConfirmSyncViewModel"
         Icon="/Assets/omnisync.ico"
-        Title="Confirmar sincronização"
-        Width="560" SizeToContent="Height"
+        Title="Revisar antes de sincronizar"
+        Width="600" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource OsCardBrush}"
         CanResize="False">
 
-    <StackPanel Margin="24,20" Spacing="14">
-        <StackPanel Spacing="2">
-            <TextBlock Text="Revise antes de sincronizar" FontSize="18" FontWeight="Bold" />
-            <TextBlock Classes="subtle" FontSize="12" TextWrapping="Wrap">
-                <Run Text="Destino: " /><Run Text="{Binding Summary.DestinationPath}" FontWeight="SemiBold" />
-            </TextBlock>
+    <StackPanel>
+        <StackPanel Margin="24,22,24,6" Spacing="6">
+            <TextBlock Text="Revise antes de sincronizar" FontSize="20" FontWeight="Bold" />
+            <TextBlock Classes="mono caption" TextWrapping="Wrap" Text="{Binding RouteText}" />
         </StackPanel>
 
-        <Border Classes="card" Padding="14,10">
-            <Grid ColumnDefinitions="Auto,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
-                <PathIcon Grid.Row="0" Data="{StaticResource IconPlus}" Classes="small new" />
-                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Summary.NewCount}" FontWeight="Bold" HorizontalAlignment="Right" />
-                <TextBlock Grid.Row="0" Grid.Column="2">
-                    <Run Text="arquivos novos serão copiados (" /><Run Text="{Binding Summary.NewBytesFormatted}" /><Run Text=")" />
-                </TextBlock>
-
-                <PathIcon Grid.Row="1" Data="{StaticResource IconConflict}" Classes="small conflict" />
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary.ReplaceCount}" FontWeight="Bold" HorizontalAlignment="Right" />
-                <TextBlock Grid.Row="1" Grid.Column="2" Text="conflitos serão substituídos (versão atual vai para old/)" TextWrapping="Wrap" />
-
-                <PathIcon Grid.Row="2" Data="{StaticResource IconCheck}" Classes="small identical" />
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Summary.IgnoreCount}" FontWeight="Bold" HorizontalAlignment="Right" />
-                <TextBlock Grid.Row="2" Grid.Column="2" Text="conflitos serão ignorados (destino mantido)" />
-
-                <PathIcon Grid.Row="3" Data="{StaticResource IconWarning}" Classes="small warning" />
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Summary.AskCount}" FontWeight="Bold" HorizontalAlignment="Right" />
-                <TextBlock Grid.Row="3" Grid.Column="2" Text="conflitos sem decisão (será perguntado durante a execução)" TextWrapping="Wrap" />
-
-                <PathIcon Grid.Row="4" Data="{StaticResource IconTrash}" Classes="small orphan" />
-                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Summary.OrphanCount}" FontWeight="Bold" HorizontalAlignment="Right" />
-                <TextBlock Grid.Row="4" Grid.Column="2" Text="arquivos órfãos serão movidos para lixo/ (nada é apagado)" TextWrapping="Wrap" />
+        <StackPanel Margin="24,6,24,14">
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch new" />
+                <TextBlock Grid.Column="1" Text="Copiar arquivos novos" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.NewCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="{Binding Summary.NewBytesFormatted}" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
             </Grid>
-        </Border>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch conflict" />
+                <TextBlock Grid.Column="1" Text="Substituir (a versão atual vai para old/)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.ReplaceCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="{Binding Summary.ReplaceBytesFormatted}" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch identical" />
+                <TextBlock Grid.Column="1" Text="Manter o destino (conflitos ignorados)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.IgnoreCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="—" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" IsVisible="{Binding HasAsk}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46" IsVisible="{Binding HasAsk}">
+                <PathIcon Data="{StaticResource IconWarning}" Classes="small warning" />
+                <TextBlock Grid.Column="1" Text="Conflitos sem decisão (perguntar na hora)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.AskCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="—" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch orphan" />
+                <TextBlock Grid.Column="1" Text="Mover para lixo/ (existem só no destino)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.OrphanCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="{Binding OrphanShareText}" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </StackPanel>
 
-        <Border Classes="warning-banner" IsVisible="{Binding Summary.HasWarnings}">
+        <Border Classes="warning-banner" Margin="24,0,24,14" IsVisible="{Binding Summary.HasWarnings}">
             <StackPanel Spacing="4">
                 <TextBlock Text="Avisos da análise" FontWeight="SemiBold" FontSize="12" />
                 <ItemsControl ItemsSource="{Binding Summary.Warnings}">
@@ -56,23 +66,27 @@
             </StackPanel>
         </Border>
 
-        <Border Classes="danger-banner" IsVisible="{Binding Summary.IsMassOrphan}">
+        <Border Classes="danger-banner" Margin="24,0,24,16" IsVisible="{Binding Summary.IsMassOrphan}">
             <StackPanel Spacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <PathIcon Data="{StaticResource IconWarning}" />
-                    <TextBlock Text="Grande parte do destino será movida para lixo/" FontWeight="Bold" />
-                </StackPanel>
-                <TextBlock TextWrapping="Wrap" FontSize="12"
-                           Text="Isso costuma indicar que o destino escolhido não é o par correto desta origem. Confira o caminho acima." />
-                <CheckBox IsChecked="{Binding MassOrphanAcknowledged}">
-                    <TextBlock Text="{Binding MassOrphanText}" TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                    <TextBlock Grid.Column="1" TextWrapping="Wrap">
+                        <Run Text="Grande parte do destino iria para lixo/." FontWeight="Bold" />
+                        <Run Text="Isso costuma indicar origem ou destino trocados, ou a subpasta errada." />
+                    </TextBlock>
+                </Grid>
+                <CheckBox IsChecked="{Binding MassOrphanAcknowledged}" Margin="26,0,0,0">
+                    <TextBlock Text="{Binding MassOrphanText}" TextWrapping="Wrap" FontWeight="SemiBold" />
                 </CheckBox>
             </StackPanel>
         </Border>
 
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-            <Button Content="Cancelar" Command="{Binding CancelCommand}" Padding="16,8" IsCancel="True" />
-            <Button Content="Sincronizar" Command="{Binding ConfirmCommand}" Classes="accent" Padding="18,8" FontWeight="SemiBold" />
-        </StackPanel>
+        <Border Background="{DynamicResource OsPanelBrush}" BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="0,1,0,0" Padding="24,14">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="Nenhum arquivo é excluído." Classes="subtle" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Content="Voltar ao plano" Command="{Binding CancelCommand}" IsCancel="True" MinHeight="40" />
+                <Button Grid.Column="2" Classes="accent primary" Content="Sincronizar agora" Command="{Binding ConfirmCommand}" />
+            </Grid>
+        </Border>
     </StackPanel>
 </Window>

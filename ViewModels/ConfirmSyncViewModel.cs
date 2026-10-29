@@ -45,6 +45,25 @@ public partial class ConfirmSyncViewModel : ViewModelBase
         $"Entendo que {Summary.OrphanCount} arquivo(s) ({Summary.OrphanPercent:n0}% do destino) serão movidos para lixo/.";
 
     /// <summary>
+    /// Origem e destino em uma linha.
+    /// </summary>
+    public string RouteText => string.IsNullOrWhiteSpace(Summary.SourcePath)
+        ? Summary.DestinationPath
+        : $"{Summary.SourcePath}  →  {Summary.DestinationPath}";
+
+    /// <summary>
+    /// Parcela do destino que irá para <c>lixo/</c>.
+    /// </summary>
+    public string OrphanShareText => Summary.DestinationFileCount > 0
+        ? $"{Summary.OrphanPercent:0}% do destino"
+        : "—";
+
+    /// <summary>
+    /// Indica se há conflitos sem decisão.
+    /// </summary>
+    public bool HasAsk => Summary.AskCount > 0;
+
+    /// <summary>
     /// Inicializa o diálogo com o resumo do plano.
     /// </summary>
     public ConfirmSyncViewModel(SyncPlanSummary summary)

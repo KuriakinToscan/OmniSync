@@ -9,6 +9,8 @@ namespace OmniSync.ViewModels;
 /// </summary>
 public enum ItemFilter
 {
+    /// <summary>Apenas o que será alterado (padrão): novos, conflitos, órfãos e itens com erro.</summary>
+    Changes,
     /// <summary>Todos os itens.</summary>
     All,
     /// <summary>Apenas novos.</summary>
@@ -88,6 +90,15 @@ public sealed class SyncPlanSummary
 
     /// <summary>Volume dos arquivos novos.</summary>
     public long NewBytes { get; init; }
+
+    /// <summary>Volume das versões que substituirão as atuais.</summary>
+    public long ReplaceBytes { get; init; }
+
+    /// <summary>Volume de substituição formatado.</summary>
+    public string ReplaceBytesFormatted => SyncItem.FormatBytes(ReplaceBytes);
+
+    /// <summary>Caminho de origem.</summary>
+    public string SourcePath { get; init; } = string.Empty;
 
     /// <summary>Conflitos marcados para substituir.</summary>
     public int ReplaceCount { get; init; }

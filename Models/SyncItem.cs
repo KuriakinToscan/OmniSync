@@ -68,6 +68,12 @@ public partial class SyncItem : ObservableObject
     private bool _isProcessed = false;
 
     /// <summary>
+    /// Caminho exibido na lista: relativo à pasta selecionada na árvore (ou o caminho relativo completo).
+    /// </summary>
+    [ObservableProperty]
+    private string? _displayPath;
+
+    /// <summary>
     /// Indica se a última tentativa de processar este item terminou em erro.
     /// </summary>
     [ObservableProperty]
@@ -121,6 +127,117 @@ public partial class SyncItem : ObservableObject
             _ => ConflictResolution.AskUser
         };
     }
+
+    /// <summary>Decisão "Substituir" (para os botões de opção do painel de detalhes).</summary>
+    public bool IsResolutionReplace
+    {
+        get => Resolution == ConflictResolution.Replace;
+        set { if (value) Resolution = ConflictResolution.Replace; }
+    }
+
+    /// <summary>Decisão "Manter destino" (para os botões de opção do painel de detalhes).</summary>
+    public bool IsResolutionIgnore
+    {
+        get => Resolution == ConflictResolution.Ignore;
+        set { if (value) Resolution = ConflictResolution.Ignore; }
+    }
+
+    /// <summary>Decisão "Perguntar na hora" (para os botões de opção do painel de detalhes).</summary>
+    public bool IsResolutionAsk
+    {
+        get => Resolution == ConflictResolution.AskUser;
+        set { if (value) Resolution = ConflictResolution.AskUser; }
+    }
+
+    /// <summary>
+    /// Nome do arquivo sem a pasta.
+    /// </summary>
+    public string FileName => System.IO.Path.GetFileName(RelativePath);
+
+    /// <summary>
+    /// Pasta relativa que contém o arquivo (vazia na raiz).
+    /// </summary>
+    public string FolderPath => System.IO.Path.GetDirectoryName(RelativePath) ?? string.Empty;
+
+    /// <summary>
+    /// Pasta relativa para exibição ("raiz" quando vazia).
+    /// </summary>
+    public string FolderDisplay => string.IsNullOrEmpty(FolderPath) ? "(raiz)" : FolderPath;
+
+    /// <summary>
+    /// Lado com a versão mais recente, para a coluna "Mais recente" da lista.
+    /// </summary>
+    public string NewerSideText => ConflictDirection switch
+    {
+        ConflictDirection.SourceNewer => "Origem",
+        ConflictDirection.DestinationNewer => "Destino",
+        ConflictDirection.SameTime => "Mesma hora",
+        _ => "—"
+    };
+
+    /// <summary>Indica conflito em que a origem é mais recente.</summary>
+    public bool IsSourceNewer => ConflictDirection == ConflictDirection.SourceNewer;
+
+    /// <summary>Indica conflito em que o destino é mais recente.</summary>
+    public bool IsDestinationNewer => ConflictDirection == ConflictDirection.DestinationNewer;
+
+    /// <summary>Indica se o item é um conflito ainda decidível (não processado).</summary>
+    public bool CanDecide => IsConflict && !IsProcessed;
+
+    /// <summary>Indica conflito pendente ainda sem decisão (será perguntado na hora).</summary>
+    public bool NeedsDecision => IsConflict && !IsProcessed && Resolution == ConflictResolution.AskUser;
+
+    /// <summary>Indica se existe versão na origem.</summary>
+    public bool HasSource => SourceFullPath != null;
+
+    /// <summary>Indica se existe versão no destino.</summary>
+    public bool HasDestination => DestinationModifiedUtc.HasValue;
+
+    /// <summary>
+    /// Tamanho exibido na lista: o da origem, ou o do destino para órfãos.
+    /// </summary>
+    public string DisplaySize => SourceFullPath != null ? FormatBytes(SourceSize) : FormatBytes(DestinationSize);
+
+    /// <summary>
+    /// Explicação do que acontecerá com o item, para o painel de detalhes.
+    /// </summary>
+    public string PlanDescription => ActionType switch
+    {
+        SyncActionType.New => "Existe só na origem. Será copiado para o destino com a mesma data de modificação.",
+        SyncActionType.OrphanTrash => "Existe só no destino. Será movido para lixo/, sem ser apagado.",
+        SyncActionType.Identical => "Igual nos dois lados. Nada será feito.",
+        SyncActionType.Conflict => "Existe nos dois lados com conteúdo diferente. Escolha o que fazer:",
+        _ => string.Empty
+    };
+
+    /// <summary>
+    /// Verbo curto da ação planejada, exibido na lista.
+    /// </summary>
+    public string ActionVerb => ActionType switch
+    {
+        SyncActionType.New => "Copiar",
+        SyncActionType.Conflict => "Conflito",
+        SyncActionType.OrphanTrash => "Para lixo/",
+        SyncActionType.Identical => "Idêntico",
+        _ => "—"
+    };
+
+    /// <summary>
+    /// Ação exibida na lista: o verbo da categoria, ou a decisão quando o item é conflito.
+    /// </summary>
+    public string ActionSummary => ActionType == SyncActionType.Conflict ? ResolutionText : ActionVerb;
+
+    /// <summary>
+    /// Texto da decisão para a lista (vazio quando o item não é conflito).
+    /// </summary>
+    public string ResolutionText => ActionType != SyncActionType.Conflict
+        ? string.Empty
+        : Resolution switch
+        {
+            ConflictResolution.Replace => "Substituir",
+            ConflictResolution.Ignore => "Manter destino",
+            _ => "Perguntar"
+        };
 
     /// <summary>
     /// Texto amigável exibido na coluna "Ação" da tabela de prévia.
@@ -198,10 +315,25 @@ public partial class SyncItem : ObservableObject
     }
 
     /// <summary>
+    /// Notifica a interface quando o item deixa de ser decidível.
+    /// </summary>
+    partial void OnIsProcessedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanDecide));
+        OnPropertyChanged(nameof(NeedsDecision));
+    }
+
+    /// <summary>
     /// Notifica a interface gráfica para atualizar as propriedades derivadas sempre que <see cref="Resolution"/> mudar.
     /// </summary>
     partial void OnResolutionChanged(ConflictResolution value)
     {
         OnPropertyChanged(nameof(ResolutionIndex));
+        OnPropertyChanged(nameof(IsResolutionReplace));
+        OnPropertyChanged(nameof(IsResolutionIgnore));
+        OnPropertyChanged(nameof(IsResolutionAsk));
+        OnPropertyChanged(nameof(ResolutionText));
+        OnPropertyChanged(nameof(ActionSummary));
+        OnPropertyChanged(nameof(NeedsDecision));
     }
 }

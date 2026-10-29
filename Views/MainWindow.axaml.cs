@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -39,11 +40,29 @@ public partial class MainWindow : Window
             vm.ConfirmSyncAsync = ConfirmSyncAsync;
             vm.PickSaveFileAsync = PickSaveFileAsync;
             vm.SelectTrashEntriesAsync = SelectTrashEntriesAsync;
+            vm.ConfirmAsync = (title, message, confirmText) => MessageDialog.ShowAsync(this, title, message, confirmText);
         }
     }
 
     /// <summary>
-    /// Salva as preferências do usuário ao fechar a janela.
+    /// Largura abaixo da qual a árvore de pastas é ocultada para preservar a lista de arquivos.
+    /// </summary>
+    private const double CompactWidth = 1240;
+
+    /// <summary>
+    /// Alterna a classe <c>compact</c> conforme a largura da janela.
+    /// </summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ClientSizeProperty)
+        {
+            Classes.Set("compact", ClientSize.Width < CompactWidth);
+        }
+    }
+
+    /// <summary>
+    /// Salva os pares e as preferências do usuário ao fechar a janela.
     /// </summary>
     protected override void OnClosing(WindowClosingEventArgs e)
     {

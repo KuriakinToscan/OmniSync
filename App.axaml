@@ -14,7 +14,13 @@
     </Application.Resources>
 
     <Application.Styles>
-        <FluentTheme />
+        <FluentTheme>
+            <!-- Cor de destaque própria (verde-azulado) no lugar do azul padrão do sistema -->
+            <FluentTheme.Palettes>
+                <ColorPaletteResources x:Key="Light" Accent="#FF0E6E6D" />
+                <ColorPaletteResources x:Key="Dark" Accent="#FF2FA3A1" />
+            </FluentTheme.Palettes>
+        </FluentTheme>
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
         <StyleInclude Source="avares://OmniSync/Styles/AppStyles.axaml"/>
     </Application.Styles>

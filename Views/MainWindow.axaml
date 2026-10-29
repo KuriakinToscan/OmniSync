@@ -7,381 +7,802 @@
         x:DataType="vm:MainViewModel"
         Icon="/Assets/omnisync.ico"
         Title="OmniSync"
-        Width="1120" Height="760"
-        MinWidth="820" MinHeight="620"
+        Width="1320" Height="820"
+        MinWidth="1080" MinHeight="640"
         WindowStartupLocation="CenterScreen">
 
     <Window.KeyBindings>
         <KeyBinding Gesture="F5" Command="{Binding ScanCommand}" />
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding StartSyncCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+        <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProfileCommand}" />
     </Window.KeyBindings>
 
-    <Grid Margin="18,14,18,12" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+    <Grid RowDefinitions="Auto,*">
 
-        <!-- 1. Cabeçalho -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
-            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <Image Source="/Assets/omnisync.png" Width="34" Height="34" />
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="OmniSync" FontSize="18" FontWeight="Bold" />
-                    <TextBlock Classes="caption" Text="Sincronização unidirecional com lixeira (lixo/) e histórico de versões (old/)" />
+        <!-- ============================== Cabeçalho ============================== -->
+        <Border Grid.Row="0" Classes="appbar" Height="56" Padding="18,0">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Image Source="/Assets/omnisync.png" Width="28" Height="28" />
+                    <TextBlock Text="OmniSync" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
                 </StackPanel>
-            </StackPanel>
-            <Button Grid.Column="2" Classes="ghost" Command="{Binding OpenLogsFolderCommand}"
-                    ToolTip.Tip="Abrir a pasta com os logs completos de todas as execuções"
-                    AutomationProperties.Name="Abrir pasta de logs">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{StaticResource IconLog}" Classes="small" />
-                    <TextBlock Text="Logs" />
+                <TextBlock Grid.Column="1" Text="/" Classes="subtle" Margin="10,0,4,0" VerticalAlignment="Center" />
+                <TextBox Grid.Column="2" Classes="inline-edit" Text="{Binding ProfileName}" Width="300"
+                         VerticalAlignment="Center" IsEnabled="{Binding CanManageProfiles}"
+                         ToolTip.Tip="Nome deste par (clique para renomear)"
+                         AutomationProperties.Name="Nome do par" />
+
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Classes="secondary" ToolTip.Tip="Registro das operações desta sessão" AutomationProperties.Name="Registro">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <PathIcon Data="{StaticResource IconList}" Classes="small" />
+                            <TextBlock Text="Registro" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                                <Grid Width="560" Height="440" RowDefinitions="Auto,*">
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                        <TextBlock Text="Registro da sessão" Classes="section" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="link" Content="Abrir pasta de logs" Command="{Binding OpenLogsFolderCommand}" />
+                                    </Grid>
+                                    <ListBox Grid.Row="1" Classes="log" ItemsSource="{Binding Logs}" Background="Transparent">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:LogEntry">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                    <TextBlock Text="{Binding Time}" Classes="subtle mono" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" Classes="mono"
+                                                               Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Classes="secondary" Command="{Binding OpenLogsFolderCommand}"
+                            ToolTip.Tip="Abrir a pasta com os logs completos de todas as execuções">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <PathIcon Data="{StaticResource IconLog}" Classes="small" />
+                            <TextBlock Text="Logs" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
-            </Button>
-        </Grid>
-
-        <!-- 2. Seleção de pastas, opções e ações -->
-        <Border Grid.Row="1" Classes="card" Padding="14,12" Margin="0,0,0,10">
-            <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
-                <Grid ColumnDefinitions="*,14,*">
-                    <StackPanel Spacing="5">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Data="{StaticResource IconFolder}" Classes="small" />
-                            <TextBlock Classes="section" Text="Origem" />
-                        </StackPanel>
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                            <TextBox Text="{Binding SourcePath}" PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
-                                     AutomationProperties.Name="Diretório de origem" />
-                            <Button Grid.Column="1" Content="Procurar..." Command="{Binding BrowseSourceCommand}" />
-                        </Grid>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" Spacing="5">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Data="{StaticResource IconDrive}" Classes="small" />
-                            <TextBlock Classes="section" Text="Destino (local ou NAS)" />
-                        </StackPanel>
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                            <TextBox Text="{Binding DestinationPath}" PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
-                                     AutomationProperties.Name="Diretório de destino" />
-                            <Button Grid.Column="1" Content="Procurar..." Command="{Binding BrowseDestinationCommand}" />
-                        </Grid>
-                    </StackPanel>
-                </Grid>
-
-                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <WrapPanel VerticalAlignment="Center" ItemSpacing="16" LineSpacing="4">
-                        <CheckBox Content="Subpasta com nome da origem"
-                                  IsChecked="{Binding UseSourceFolderNameInDestination}"
-                                  ToolTip.Tip="Origem 'E:\Fotos' + Destino 'G:\' sincroniza em 'G:\Fotos' sem afetar outras pastas do drive G:" />
-                        <CheckBox Content="Verificar conteúdo (SHA-256)"
-                                  IsChecked="{Binding EnableDeepHashCheck}"
-                                  ToolTip.Tip="Arquivos de mesmo tamanho são comparados pelo conteúdo, não pela data. Mais lento, mais seguro." />
-                        <CheckBox Content="Tolerar 1 h (horário de verão)"
-                                  IsChecked="{Binding TolerateDstShift}"
-                                  ToolTip.Tip="Considera iguais arquivos cuja data difere exatamente 1 hora. Útil com pendrives/HDs em FAT ou exFAT." />
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="Ignorar:" VerticalAlignment="Center" Classes="subtle" />
-                            <TextBox Text="{Binding ExcludePatternsText}" Width="230"
-                                     ToolTip.Tip="Padrões separados por ponto e vírgula, aplicados ao nome de arquivos e pastas (* e ?). Ex.: Thumbs.db; ~$*; *.tmp"
-                                     AutomationProperties.Name="Padrões de exclusão" />
-                        </StackPanel>
-                    </WrapPanel>
-
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Button Classes="icon-text" Command="{Binding ScanCommand}" ToolTip.Tip="Analisar diferenças sem alterar nada (F5)">
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <PathIcon Data="{StaticResource IconSearch}" Classes="small" />
-                                <TextBlock Text="Analisar" />
-                            </StackPanel>
-                        </Button>
-                        <Button Classes="accent icon-text" Command="{Binding StartSyncCommand}" ToolTip.Tip="Revisar o plano e sincronizar (Ctrl+Enter)">
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <PathIcon Data="{StaticResource IconPlay}" Classes="small" />
-                                <TextBlock Text="Sincronizar" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </Button>
-                        <Button Classes="icon-text" Command="{Binding CancelCommand}" IsVisible="{Binding IsBusy}" ToolTip.Tip="Cancelar (Esc)">
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <PathIcon Data="{StaticResource IconClose}" Classes="small" />
-                                <TextBlock Text="Cancelar" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Grid>
             </Grid>
         </Border>
 
-        <!-- 3. Avisos da análise -->
-        <Border Grid.Row="2" Classes="warning-banner" Margin="0,0,0,10" IsVisible="{Binding HasScanWarnings}">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
-                <ScrollViewer Grid.Column="1" MaxHeight="72" VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding ScanWarnings}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                            <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,1" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                </ScrollViewer>
-            </Grid>
-        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="248,*">
 
-        <!-- 4. Resumo (cartões clicáveis filtram a grade) -->
-        <Grid Grid.Row="3" ColumnDefinitions="*,10,*,10,*,10,*,10,*" Margin="0,0,0,10">
-            <Button Grid.Column="0" Classes="metric"
-                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.New}}"
-                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.New}">
-                <StackPanel Spacing="2">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconPlus}" Classes="small new" />
-                        <TextBlock Classes="caption" Text="Novos a copiar" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Classes="value new" Text="{Binding NewCount}" />
-                        <TextBlock Classes="caption" Text="{Binding NewBytesFormatted}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
-                    </StackPanel>
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="2" Classes="metric"
-                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Conflicts}}"
-                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Conflicts}">
-                <StackPanel Spacing="2">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconConflict}" Classes="small conflict" />
-                        <TextBlock Classes="caption" Text="Conflitos" />
-                    </StackPanel>
-                    <TextBlock Classes="value conflict" Text="{Binding ConflictCount}" />
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="4" Classes="metric"
-                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Orphans}}"
-                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Orphans}">
-                <StackPanel Spacing="2">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconTrash}" Classes="small orphan" />
-                        <TextBlock Classes="caption" Text="Órfãos (p/ lixo/)" />
-                    </StackPanel>
-                    <TextBlock Classes="value orphan" Text="{Binding TrashCount}" />
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="6" Classes="metric"
-                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Identical}}"
-                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Identical}">
-                <StackPanel Spacing="2">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconCheck}" Classes="small identical" />
-                        <TextBlock Classes="caption" Text="Idênticos" />
-                    </StackPanel>
-                    <TextBlock Classes="value identical" Text="{Binding IdenticalCount}" />
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="8" Classes="metric"
-                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Errors}}"
-                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Errors}">
-                <StackPanel Spacing="2">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconError}" Classes="small error" />
-                        <TextBlock Classes="caption" Text="Erros" />
-                    </StackPanel>
-                    <TextBlock Classes="value error" Text="{Binding ErrorCount}" />
-                </StackPanel>
-            </Button>
-        </Grid>
-
-        <!-- 5. Prévia e Log -->
-        <TabControl Grid.Row="4" Margin="0,0,0,8" Padding="0">
-            <TabItem>
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal" Spacing="7">
-                        <PathIcon Data="{StaticResource IconList}" Classes="small" />
-                        <TextBlock Text="Prévia" FontSize="14" />
-                    </StackPanel>
-                </TabItem.Header>
-                <Grid RowDefinitions="Auto,*" Margin="0,8,0,0">
-                    <!-- Filtros e busca -->
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                        <WrapPanel ItemSpacing="6" LineSpacing="6" VerticalAlignment="Center">
-                            <Button Classes="chip" Content="Todos"
-                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.All}}"
-                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.All}" />
-                            <Button Classes="chip" Content="Novos"
-                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.New}}"
-                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.New}" />
-                            <Button Classes="chip" Content="Conflitos"
-                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Conflicts}}"
-                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Conflicts}" />
-                            <Button Classes="chip" Content="Órfãos"
-                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Orphans}}"
-                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Orphans}" />
-                            <Button Classes="chip" Content="Idênticos"
-                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Identical}}"
-                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Identical}" />
-                            <Button Classes="chip" Content="Erros"
-                                    Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Errors}}"
-                                    Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Errors}" />
-                            <DropDownButton Classes="chip" IsVisible="{Binding CanEditConflicts}" Margin="8,0,0,0"
-                                            ToolTip.Tip="Definir a decisão de todos os conflitos pendentes antes de sincronizar">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Data="{StaticResource IconConflict}" Classes="small conflict" />
-                                    <TextBlock Text="Decidir conflitos" />
-                                </StackPanel>
-                                <DropDownButton.Flyout>
-                                    <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                                        <MenuItem Header="Mais recente vence (substitui só quando a origem é mais nova)" Command="{Binding MarkConflictsNewestWinsCommand}" />
-                                        <MenuItem Header="Substituir todos (versões atuais vão para old/)" Command="{Binding MarkAllConflictsAsReplaceCommand}" />
-                                        <MenuItem Header="Ignorar todos (manter destino)" Command="{Binding MarkAllConflictsAsIgnoreCommand}" />
-                                    </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
-                        </WrapPanel>
-                        <TextBox Grid.Column="1" Width="240" VerticalAlignment="Top" Text="{Binding SearchText}"
-                                 PlaceholderText="Buscar no caminho..." AutomationProperties.Name="Buscar no caminho">
-                            <TextBox.InnerLeftContent>
-                                <PathIcon Data="{StaticResource IconSearch}" Classes="small" Margin="8,0,0,0" Opacity="0.6" />
-                            </TextBox.InnerLeftContent>
-                        </TextBox>
+            <!-- ============================== Barra lateral: pares salvos ============================== -->
+            <Border Grid.Column="0" Classes="sidebar" Padding="12,14">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="8,0,0,8">
+                        <TextBlock Text="PARES SALVOS" Classes="eyebrow" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="icon-only" Command="{Binding NewProfileCommand}"
+                                ToolTip.Tip="Novo par (Ctrl+N)" AutomationProperties.Name="Novo par">
+                            <PathIcon Data="{StaticResource IconPlus}" Classes="small accent-text" />
+                        </Button>
                     </Grid>
 
-                    <Panel Grid.Row="1">
-                        <DataGrid ItemsSource="{Binding FilteredItems}"
-                                  AutoGenerateColumns="False"
-                                  IsReadOnly="True"
-                                  CanUserResizeColumns="True"
-                                  CanUserSortColumns="True"
-                                  GridLinesVisibility="Horizontal"
-                                  BorderThickness="1"
-                                  BorderBrush="{DynamicResource OsCardBorderBrush}"
-                                  CornerRadius="8">
-                            <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="Ação" Width="190" SortMemberPath="ActionDisplay">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate x:DataType="models:SyncItem">
-                                            <StackPanel Orientation="Horizontal" Spacing="7" Margin="10,0" VerticalAlignment="Center"
-                                                        Classes.new="{Binding IsNew}" Classes.conflict="{Binding IsConflict}"
-                                                        Classes.orphan="{Binding IsOrphan}" Classes.identical="{Binding IsIdentical}">
-                                                <Panel Width="13" Height="13">
-                                                    <PathIcon Data="{StaticResource IconPlus}" Classes="small" IsVisible="{Binding IsNew}" />
-                                                    <PathIcon Data="{StaticResource IconConflict}" Classes="small" IsVisible="{Binding IsConflict}" />
-                                                    <PathIcon Data="{StaticResource IconTrash}" Classes="small" IsVisible="{Binding IsOrphan}" />
-                                                    <PathIcon Data="{StaticResource IconCheck}" Classes="small" IsVisible="{Binding IsIdentical}" />
-                                                </Panel>
-                                                <TextBlock Text="{Binding ActionDisplay}" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-
-                                <DataGridTextColumn Header="Caminho relativo" Binding="{Binding RelativePath}" Width="*" MinWidth="200" />
-
-                                <DataGridTemplateColumn Header="Decisão" Width="120" SortMemberPath="ResolutionIndex">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate x:DataType="models:SyncItem">
-                                            <ComboBox IsVisible="{Binding IsConflict}" IsEnabled="{Binding !IsProcessed}"
-                                                      SelectedIndex="{Binding ResolutionIndex, Mode=TwoWay}"
-                                                      HorizontalAlignment="Stretch" Margin="4,2" FontSize="12" MinHeight="26" Padding="8,2">
-                                                <ComboBoxItem Content="Perguntar" />
-                                                <ComboBoxItem Content="Substituir" />
-                                                <ComboBoxItem Content="Ignorar" />
-                                            </ComboBox>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-
-                                <DataGridTextColumn Header="Tam. orig." Binding="{Binding FormattedSourceSize}" SortMemberPath="SourceSize" Width="92" />
-                                <DataGridTextColumn Header="Tam. dest." Binding="{Binding FormattedDestinationSize}" SortMemberPath="DestinationSize" Width="92" />
-                                <DataGridTextColumn Header="Modif. origem" Binding="{Binding ShortSourceDate}" SortMemberPath="SourceModifiedUtc" Width="128" />
-                                <DataGridTextColumn Header="Modif. destino" Binding="{Binding ShortDestinationDate}" SortMemberPath="DestinationModifiedUtc" Width="128" />
-
-                                <DataGridTemplateColumn Header="Status" Width="160" SortMemberPath="StatusMessage">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate x:DataType="models:SyncItem">
-                                            <TextBlock Text="{Binding StatusMessage}" Classes.error="{Binding HasError}"
-                                                       Margin="10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                                       ToolTip.Tip="{Binding StatusMessage}" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <TextBlock Text="{Binding EmptyStateText}" IsVisible="{Binding IsEmptyStateVisible}"
-                                   Classes="subtle" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420" IsHitTestVisible="False" />
-                    </Panel>
-                </Grid>
-            </TabItem>
-
-            <TabItem>
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal" Spacing="7">
-                        <PathIcon Data="{StaticResource IconLog}" Classes="small" />
-                        <TextBlock Text="Registro" FontSize="14" />
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="2" Margin="0,10,0,0">
+                        <Border Height="1" Background="{DynamicResource OsDividerBrush}" Margin="4,0,4,8" />
+                        <TextBlock Text="PASTAS DE SEGURANÇA" Classes="eyebrow" Margin="8,0,0,4" />
+                        <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Command="{Binding RestoreTrashCommand}"
+                                ToolTip.Tip="Escolher arquivos de lixo/ para devolver ao local original">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{StaticResource IconRestore}" Classes="small" />
+                                <TextBlock Text="Restaurar de lixo/" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Command="{Binding OpenTrashFolderCommand}" ToolTip.Tip="Abrir destino/lixo/">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{StaticResource IconTrash}" Classes="small" />
+                                <TextBlock Text="Abrir lixo/" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Command="{Binding OpenOldFolderCommand}" ToolTip.Tip="Abrir destino/old/ (versões substituídas)">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{StaticResource IconHistory}" Classes="small" />
+                                <TextBlock Text="Abrir old/" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
-                </TabItem.Header>
-                <Border Classes="card" Margin="0,8,0,0" Padding="4">
-                    <ListBox ItemsSource="{Binding Logs}" Background="Transparent"
-                             FontFamily="Cascadia Mono, Consolas, DejaVu Sans Mono, monospace" FontSize="12">
+
+                    <ListBox Classes="profiles" ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile}"
+                             IsEnabled="{Binding CanManageProfiles}" AutomationProperties.Name="Pares salvos">
                         <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:LogEntry">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                    <TextBlock Text="{Binding Time}" Classes="subtle" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap"
-                                               Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}" />
+                            <DataTemplate x:DataType="vm:ProfileItemViewModel">
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="2" Background="Transparent">
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Remover par"
+                                                      Command="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).DeleteProfileCommand}"
+                                                      CommandParameter="{Binding}" />
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+                                    <Border Classes="dot"
+                                            Classes.conflict="{Binding IsPlanReady}" Classes.running="{Binding IsRunning}"
+                                            Classes.success="{Binding IsSuccess}" Classes.error="{Binding IsProblem}" />
+                                    <TextBlock Grid.Column="1" Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextTrimming="CharacterEllipsis" />
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                </Border>
-            </TabItem>
-        </TabControl>
+                </DockPanel>
+            </Border>
 
-        <!-- 6. Progresso (visível só durante operações) -->
-        <Border Grid.Row="5" Classes="card" Padding="12,10" Margin="0,0,0,8" IsVisible="{Binding IsBusy}">
-            <StackPanel Spacing="6">
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Text="{Binding CurrentOperationText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14">
-                        <TextBlock Text="{Binding ProcessedFilesText}" Classes="subtle" />
-                        <TextBlock Text="{Binding SpeedFormatted}" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding EtaFormatted}" Classes="subtle" ToolTip.Tip="Tempo restante estimado" />
+            <Panel Grid.Column="1">
+
+                <!-- ============================== Tela 1: configuração do par ============================== -->
+                <ScrollViewer IsVisible="{Binding IsSetupScreen}" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel MaxWidth="940" Margin="32,36,32,32" Spacing="24">
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="title" Text="O que você quer manter sincronizado?" />
+                            <TextBlock Classes="subtle" FontSize="14" TextWrapping="Wrap"
+                                       Text="A análise só lê as pastas. Nada é alterado até você revisar e confirmar o plano." />
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="14">
+                            <Border Classes="card" Padding="18,16" MinHeight="150">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="1 · ORIGEM" Classes="eyebrow accent" Margin="0,0,0,10" />
+                                    <Button DockPanel.Dock="Bottom" Classes="secondary" HorizontalAlignment="Left" Margin="0,12,0,0"
+                                            Command="{Binding BrowseSourceCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                            <PathIcon Data="{StaticResource IconFolderOpen}" Classes="small" />
+                                            <TextBlock Text="Escolher pasta…" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
+                                             PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
+                                             AutomationProperties.Name="Diretório de origem" />
+                                </DockPanel>
+                            </Border>
+                            <PathIcon Grid.Column="1" Data="{StaticResource IconArrowRight}" Width="26" Height="26" Classes="accent-text" />
+                            <Border Grid.Column="2" Classes="card" Padding="18,16" MinHeight="150">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="2 · DESTINO (LOCAL OU NAS)" Classes="eyebrow" Margin="0,0,0,10" />
+                                    <Button DockPanel.Dock="Bottom" Classes="secondary" HorizontalAlignment="Left" Margin="0,12,0,0"
+                                            Command="{Binding BrowseDestinationCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                            <PathIcon Data="{StaticResource IconFolderOpen}" Classes="small" />
+                                            <TextBlock Text="Escolher pasta…" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBox Classes="mono" Text="{Binding DestinationPath}" VerticalAlignment="Top"
+                                             PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
+                                             AutomationProperties.Name="Diretório de destino" />
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Classes="card" Padding="20,16">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="Opções" Classes="section" FontSize="14" />
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="24" RowSpacing="14">
+                                    <CheckBox IsChecked="{Binding UseSourceFolderNameInDestination}" VerticalAlignment="Top">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="Criar subpasta com o nome da origem" FontWeight="SemiBold" />
+                                            <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                       Text="Origem E:\Fotos e destino G:\ sincronizam em G:\Fotos, sem afetar o resto de G:." />
+                                        </StackPanel>
+                                    </CheckBox>
+                                    <CheckBox Grid.Column="1" IsChecked="{Binding EnableDeepHashCheck}" VerticalAlignment="Top">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="Verificar conteúdo (SHA-256)" FontWeight="SemiBold" />
+                                            <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                       Text="Arquivos de mesmo tamanho são comparados pelo conteúdo. Mais lento, mais seguro." />
+                                        </StackPanel>
+                                    </CheckBox>
+                                    <CheckBox Grid.Row="1" IsChecked="{Binding TolerateDstShift}" VerticalAlignment="Top">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="Tolerar 1 h (horário de verão)" FontWeight="SemiBold" />
+                                            <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                       Text="Para pendrives e HDs em FAT/exFAT, que gravam hora local." />
+                                        </StackPanel>
+                                    </CheckBox>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="6">
+                                        <TextBlock Text="Ignorar" FontWeight="SemiBold" />
+                                        <TextBox Classes="mono" Text="{Binding ExcludePatternsText}"
+                                                 ToolTip.Tip="Padrões separados por ponto e vírgula, aplicados ao nome de arquivos e pastas (* e ?)."
+                                                 AutomationProperties.Name="Padrões de exclusão" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <Button Classes="accent primary large" Command="{Binding ScanCommand}" IsVisible="{Binding !IsScanning}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <PathIcon Data="{StaticResource IconSearch}" Classes="small" />
+                                    <TextBlock Text="Analisar" />
+                                    <TextBlock Text="F5" FontWeight="Normal" Opacity="0.8" />
+                                </StackPanel>
+                            </Button>
+                            <TextBlock Text="{Binding ScanHint}" Classes="subtle" VerticalAlignment="Center" IsVisible="{Binding !IsScanning}" />
+
+                            <Border Classes="card" Padding="14,10" IsVisible="{Binding IsScanning}" MinWidth="460">
+                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="14" RowSpacing="8">
+                                    <TextBlock Text="Analisando origem e destino…" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Grid.RowSpan="2" Classes="secondary danger-text" Command="{Binding CancelCommand}"
+                                            VerticalAlignment="Center" Content="Cancelar (Esc)" />
+                                    <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="6" CornerRadius="3" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <Border Classes="warning-banner" IsVisible="{Binding HasScanWarnings}">
+                            <ItemsControl ItemsSource="{Binding ScanWarnings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,1" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                            <Border Classes="card" Padding="14,12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Nada é apagado" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Arquivos que só existem no destino vão para lixo/." />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Classes="card" Padding="14,12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Versões antigas guardadas" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Cada substituição preserva a versão anterior em old/." />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Classes="card" Padding="14,12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Sem cópia pela metade" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Cada arquivo é gravado como temporário e só depois renomeado." />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============================== Tela 2: plano analisado ============================== -->
+                <Grid IsVisible="{Binding IsPlanScreen}" RowDefinitions="Auto,Auto,*,Auto">
+
+                    <!-- Origem → destino -->
+                    <Grid Grid.Row="0" Margin="20,16,20,0" ColumnDefinitions="*,Auto,*,Auto" ColumnSpacing="12">
+                        <Border Classes="card" Padding="14,10">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="ORIGEM" Classes="eyebrow" />
+                                <TextBlock Text="{Binding SourcePath}" Classes="mono" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SourcePath}" />
+                                <TextBlock Text="{Binding SourceStatsText}" Classes="caption" />
+                            </StackPanel>
+                        </Border>
+                        <PathIcon Grid.Column="1" Data="{StaticResource IconArrowRight}" Width="22" Height="22" Classes="accent-text" />
+                        <Border Grid.Column="2" Classes="card" Padding="14,10">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="DESTINO" Classes="eyebrow" />
+                                <TextBlock Text="{Binding DestinationPath}" Classes="mono" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DestinationPath}" />
+                                <TextBlock Text="{Binding DestinationStatsText}" Classes="caption" />
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Grid.Column="3" Spacing="8" VerticalAlignment="Center">
+                            <ItemsControl ItemsSource="{Binding ActiveOptionChips}" MaxWidth="300">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel ItemSpacing="6" LineSpacing="6" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Border Classes="tag">
+                                            <TextBlock Text="{Binding}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Classes="secondary" Command="{Binding EditSetupCommand}" ToolTip.Tip="Alterar pastas ou opções (descarta este plano)">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <PathIcon Data="{StaticResource IconEdit}" Classes="small" />
+                                        <TextBlock Text="Alterar" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="secondary" Command="{Binding ScanCommand}" ToolTip.Tip="Analisar de novo (F5)">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <PathIcon Data="{StaticResource IconRefresh}" Classes="small" />
+                                        <TextBlock Text="Reanalisar" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Resumo do plano -->
+                    <Border Grid.Row="1" Classes="card" Margin="20,12,20,0" Padding="16,14">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                                <TextBlock Classes="headline" Text="{Binding PlanHeadline}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Classes="subtle" Text="{Binding PlanSubline}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="2" Classes="link warning" IsVisible="{Binding HasScanWarnings}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <PathIcon Data="{StaticResource IconWarning}" Classes="small" />
+                                        <TextBlock Text="{Binding ScanWarningsLinkText}" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <Button.Flyout>
+                                        <Flyout Placement="BottomEdgeAlignedRight">
+                                            <ScrollViewer MaxWidth="520" MaxHeight="320">
+                                                <ItemsControl ItemsSource="{Binding ScanWarnings}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="x:String">
+                                                            <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,3" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                        </Flyout>
+                                    </Button.Flyout>
+                                </Button>
+                            </Grid>
+
+                            <views:ProportionBar Height="12"
+                                                 NewCount="{Binding NewCount}" ConflictCount="{Binding ConflictCount}" OrphanCount="{Binding TrashCount}"
+                                                 NewBrush="{DynamicResource OsNewBrush}" ConflictBrush="{DynamicResource OsConflictBrush}"
+                                                 OrphanBrush="{DynamicResource OsOrphanBrush}" TrackBrush="{DynamicResource OsTagBrush}"
+                                                 AutomationProperties.Name="Proporção entre novos, conflitos e órfãos" />
+
+                            <WrapPanel ItemSpacing="8" LineSpacing="8">
+                                <Button Classes="category"
+                                        Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.New}}"
+                                        Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.New}"
+                                        ToolTip.Tip="Mostrar só os novos (clique de novo para voltar)">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <Border Classes="swatch new" />
+                                        <TextBlock Classes="count" Text="{Binding NewCount, StringFormat='{}{0:N0}'}" />
+                                        <TextBlock Classes="subtle">
+                                            <Run Text="novos ·" /> <Run Text="{Binding NewBytesFormatted}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="category"
+                                        Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Conflicts}}"
+                                        Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Conflicts}"
+                                        ToolTip.Tip="Mostrar só os conflitos">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <Border Classes="swatch conflict" />
+                                        <TextBlock Classes="count" Text="{Binding ConflictCount, StringFormat='{}{0:N0}'}" />
+                                        <TextBlock Classes="subtle" Text="conflitos" />
+                                        <TextBlock Classes="warning" FontWeight="SemiBold" IsVisible="{Binding HasPendingDecisions}"
+                                                   Text="{Binding AskDecisionCount, StringFormat='· {0:N0} sem decisão'}" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="category"
+                                        Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Orphans}}"
+                                        Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Orphans}"
+                                        ToolTip.Tip="Mostrar só o que irá para lixo/">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <Border Classes="swatch orphan" />
+                                        <TextBlock Classes="count" Text="{Binding TrashCount, StringFormat='{}{0:N0}'}" />
+                                        <TextBlock Classes="subtle" Text="para lixo/" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="category"
+                                        Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Identical}}"
+                                        Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Identical}"
+                                        ToolTip.Tip="Mostrar os idênticos (não serão tocados)">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <Border Classes="swatch identical" />
+                                        <TextBlock Classes="count" Text="{Binding IdenticalCount, StringFormat='{}{0:N0}'}" />
+                                        <TextBlock Classes="subtle" Text="idênticos" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="category"
+                                        Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Errors}}"
+                                        Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Errors}"
+                                        ToolTip.Tip="Mostrar os itens que falharam">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <Border Classes="swatch error" />
+                                        <TextBlock Classes="count" Text="{Binding ErrorCount, StringFormat='{}{0:N0}'}" />
+                                        <TextBlock Classes="subtle" Text="erros" />
+                                    </StackPanel>
+                                </Button>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Pastas · arquivos · detalhes -->
+                    <Border Grid.Row="2" Classes="card" Margin="20,12,20,12" ClipToBounds="True">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+
+                            <DockPanel Grid.Column="0" x:Name="FolderPane" Width="240">
+                                <TextBlock DockPanel.Dock="Top" Text="PASTAS COM ALTERAÇÕES" Classes="eyebrow" Margin="14,12,8,6" />
+                                <TreeView Classes="folders" ItemsSource="{Binding FolderRoots}" SelectedItem="{Binding SelectedFolder}"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          Margin="4,0,4,8" AutomationProperties.Name="Pastas com alterações">
+                                    <TreeView.Styles>
+                                        <Style Selector="TreeViewItem" x:DataType="vm:FolderNode">
+                                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                        </Style>
+                                    </TreeView.Styles>
+                                    <TreeView.ItemTemplate>
+                                        <TreeDataTemplate x:DataType="vm:FolderNode" ItemsSource="{Binding Children}">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Background="Transparent"
+                                                  ToolTip.Tip="{Binding RelativePath}">
+                                                <PathIcon Data="{StaticResource IconFolder}" Classes="small subtle" Opacity="0.7" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                <Border Grid.Column="2" Classes="badge conflict-soft" Padding="6,0" IsVisible="{Binding HasConflicts}"
+                                                        VerticalAlignment="Center" ToolTip.Tip="Conflitos nesta pasta">
+                                                    <TextBlock Text="{Binding ConflictCount}" FontSize="11" />
+                                                </Border>
+                                                <TextBlock Grid.Column="3" Text="{Binding ChangeCount, StringFormat='{}{0:N0}'}" Classes="caption" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            </Grid>
+                                        </TreeDataTemplate>
+                                    </TreeView.ItemTemplate>
+                                </TreeView>
+                            </DockPanel>
+
+                            <Border Grid.Column="1" Width="1" Background="{DynamicResource OsCardBorderBrush}" IsVisible="{Binding #FolderPane.IsVisible}" />
+
+                            <Grid Grid.Column="2" RowDefinitions="Auto,*">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="12,10">
+                                    <TextBox Text="{Binding SearchText}" PlaceholderText="Buscar no caminho…" AutomationProperties.Name="Buscar no caminho">
+                                        <TextBox.InnerLeftContent>
+                                            <PathIcon Data="{StaticResource IconSearch}" Classes="small" Margin="10,0,0,0" Opacity="0.6" />
+                                        </TextBox.InnerLeftContent>
+                                    </TextBox>
+                                    <DropDownButton Grid.Column="1" Classes="secondary" IsEnabled="{Binding CanEditConflicts}"
+                                                    ToolTip.Tip="Definir a decisão de todos os conflitos pendentes">
+                                        <TextBlock Text="Decidir em lote" />
+                                        <DropDownButton.Flyout>
+                                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                <MenuItem Header="Mais recente vence (substitui só quando a origem é mais nova)" Command="{Binding MarkConflictsNewestWinsCommand}" />
+                                                <MenuItem Header="Substituir todos (versões atuais vão para old/)" Command="{Binding MarkAllConflictsAsReplaceCommand}" />
+                                                <MenuItem Header="Manter o destino em todos" Command="{Binding MarkAllConflictsAsIgnoreCommand}" />
+                                            </MenuFlyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
+                                </Grid>
+
+                                <Panel Grid.Row="1">
+                                    <DataGrid ItemsSource="{Binding FilteredItems}" SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                                              AutoGenerateColumns="False" IsReadOnly="True"
+                                              CanUserResizeColumns="True" CanUserSortColumns="True"
+                                              GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource OsDividerBrush}"
+                                              BorderThickness="0,1,0,0" BorderBrush="{DynamicResource OsCardBorderBrush}"
+                                              SelectionMode="Single">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="AÇÃO" Width="150" SortMemberPath="ActionSummary">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="models:SyncItem">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,0" VerticalAlignment="Center"
+                                                                    ToolTip.Tip="{Binding ActionDisplay}">
+                                                            <Border Classes="dot" Classes.new="{Binding IsNew}" Classes.conflict="{Binding IsConflict}"
+                                                                    Classes.orphan="{Binding IsOrphan}" Classes.error="{Binding HasError}" />
+                                                            <TextBlock Text="{Binding ActionSummary}" Classes.warning="{Binding NeedsDecision}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="ARQUIVO" Width="*" MinWidth="180" SortMemberPath="RelativePath">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="models:SyncItem">
+                                                        <TextBlock Text="{Binding DisplayPath}" Classes="mono" Margin="12,0" VerticalAlignment="Center"
+                                                                   TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding RelativePath}" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="TAMANHO" Binding="{Binding DisplaySize}" SortMemberPath="SourceSize" Width="110" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+
+                                    <TextBlock Text="{Binding EmptyStateText}" IsVisible="{Binding IsEmptyStateVisible}"
+                                               Classes="subtle" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420" IsHitTestVisible="False" />
+                                </Panel>
+                            </Grid>
+
+                            <!-- Painel de detalhes do arquivo selecionado -->
+                            <Border Grid.Column="3" Width="290" IsVisible="{Binding HasSelectedItem}"
+                                    Background="{DynamicResource OsPanelBrush}" BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="1,0,0,0">
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                                    <StackPanel Margin="16" Spacing="14" DataContext="{Binding SelectedItem}" x:DataType="models:SyncItem">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <Border Classes="badge" Classes.conflict-soft="{Binding IsConflict}">
+                                                <TextBlock Text="{Binding ActionDisplay}" />
+                                            </Border>
+                                            <Button Grid.Column="1" Classes="icon-only" AutomationProperties.Name="Fechar detalhes"
+                                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ClearSelectionCommand}">
+                                                <PathIcon Data="{StaticResource IconClose}" Classes="small" />
+                                            </Button>
+                                        </Grid>
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Text="{Binding FileName}" Classes="mono" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding FolderDisplay}" Classes="caption" TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                            <Border Classes="side-card" Classes.newer="{Binding IsSourceNewer}" IsVisible="{Binding HasSource}">
+                                                <StackPanel Spacing="5">
+                                                    <TextBlock Classes="eyebrow" Text="ORIGEM" />
+                                                    <TextBlock Text="{Binding FormattedSourceSize}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding ShortSourceDate}" Classes="caption" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Column="1" Classes="side-card" Classes.newer="{Binding IsDestinationNewer}" IsVisible="{Binding HasDestination}">
+                                                <StackPanel Spacing="5">
+                                                    <TextBlock Classes="eyebrow" Text="DESTINO" />
+                                                    <TextBlock Text="{Binding FormattedDestinationSize}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding ShortDestinationDate}" Classes="caption" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+
+                                        <TextBlock Text="{Binding PlanDescription}" TextWrapping="Wrap" />
+
+                                        <StackPanel Spacing="6" IsVisible="{Binding CanDecide}">
+                                            <Border Classes="option-card" Classes.checked="{Binding IsResolutionReplace}">
+                                                <RadioButton Classes="option" GroupName="decision" IsChecked="{Binding IsResolutionReplace, Mode=TwoWay}">
+                                                    <StackPanel Spacing="1">
+                                                        <TextBlock Text="Substituir" FontWeight="SemiBold" />
+                                                        <TextBlock Text="A versão atual do destino vai para old/." Classes="caption" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </RadioButton>
+                                            </Border>
+                                            <Border Classes="option-card" Classes.checked="{Binding IsResolutionIgnore}">
+                                                <RadioButton Classes="option" GroupName="decision" IsChecked="{Binding IsResolutionIgnore, Mode=TwoWay}">
+                                                    <StackPanel Spacing="1">
+                                                        <TextBlock Text="Manter destino" FontWeight="SemiBold" />
+                                                        <TextBlock Text="Nada muda neste arquivo." Classes="caption" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </RadioButton>
+                                            </Border>
+                                            <Border Classes="option-card" Classes.checked="{Binding IsResolutionAsk}">
+                                                <RadioButton Classes="option" GroupName="decision" IsChecked="{Binding IsResolutionAsk, Mode=TwoWay}">
+                                                    <StackPanel Spacing="1">
+                                                        <TextBlock Text="Perguntar na hora" FontWeight="SemiBold" />
+                                                        <TextBlock Text="Abre a comparação durante a sincronização." Classes="caption" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </RadioButton>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="eyebrow" Text="STATUS" />
+                                            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Classes.error="{Binding HasError}" />
+                                        </StackPanel>
+
+                                        <WrapPanel ItemSpacing="8" LineSpacing="8">
+                                            <Button Classes="secondary" Content="Abrir pasta na origem" IsVisible="{Binding HasSource}"
+                                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenItemLocationCommand}" CommandParameter="source" />
+                                            <Button Classes="secondary" Content="Abrir pasta no destino" IsVisible="{Binding HasDestination}"
+                                                    Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenItemLocationCommand}" CommandParameter="destination" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- Barra de ação do plano -->
+                    <Border Grid.Row="3" Classes="appbar" BorderThickness="0,1,0,0" Padding="20,10">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding PlanFooterText}" Classes="subtle" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="1" Classes="secondary" Command="{Binding ExportReportCommand}" ToolTip.Tip="Exportar o plano em CSV">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <PathIcon Data="{StaticResource IconExport}" Classes="small" />
+                                    <TextBlock Text="Exportar CSV" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="2" Classes="accent primary" Command="{Binding StartSyncCommand}" ToolTip.Tip="Revisar o plano e sincronizar (Ctrl+Enter)">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Revisar e sincronizar" />
+                                    <TextBlock Text="Ctrl+Enter" FontWeight="Normal" Opacity="0.8" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
                 </Grid>
-                <ProgressBar Value="{Binding OverallProgress}" IsIndeterminate="{Binding IsProgressIndeterminate}"
-                             Minimum="0" Maximum="100" Height="6" CornerRadius="3" />
-            </StackPanel>
-        </Border>
 
-        <!-- 7. Barra de status e acesso às pastas de segurança -->
-        <Grid Grid.Row="6" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-            <TextBlock Text="{Binding StatusMessage}" Classes="subtle" FontSize="12"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StatusMessage}" />
+                <!-- ============================== Tela 3: execução ============================== -->
+                <Grid IsVisible="{Binding IsRunScreen}" RowDefinitions="Auto,*" Margin="24,20">
+                    <Border Classes="card" Padding="24,20">
+                        <StackPanel Spacing="16">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="32">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding ProgressPercentText}" FontSize="44" FontWeight="Bold" LetterSpacing="-1" />
+                                    <TextBlock Classes="subtle">
+                                        <Run Text="{Binding ProcessedBytesText}" /><Run Text=" · " /><Run Text="{Binding ProcessedFilesText}" />
+                                    </TextBlock>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom">
+                                    <TextBlock Classes="eyebrow" Text="VELOCIDADE" />
+                                    <TextBlock Text="{Binding SpeedFormatted}" FontSize="18" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom">
+                                    <TextBlock Classes="eyebrow" Text="RESTANTE" />
+                                    <TextBlock Text="{Binding EtaFormatted}" FontSize="18" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <Button Grid.Column="4" Classes="secondary danger-text" Command="{Binding CancelCommand}" VerticalAlignment="Center"
+                                        ToolTip.Tip="Interromper. Nenhum arquivo parcial fica no destino.">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="Cancelar" FontWeight="SemiBold" />
+                                        <TextBlock Text="Esc" Classes="subtle" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <ProgressBar Value="{Binding OverallProgress}" Minimum="0" Maximum="100" Height="10" CornerRadius="5" />
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                                <Border Classes="inset" Padding="12,10">
+                                    <StackPanel Spacing="5">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border Classes="swatch new" />
+                                            <TextBlock Text="Cópias" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding CopyPhaseText}" Classes="subtle" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="1" Classes="inset" Padding="12,10">
+                                    <StackPanel Spacing="5">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border Classes="swatch conflict" />
+                                            <TextBlock Text="Conflitos" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding ReplacePhaseText}" Classes="subtle" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="2" Classes="inset" Padding="12,10">
+                                    <StackPanel Spacing="5">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border Classes="swatch orphan" />
+                                            <TextBlock Text="Para lixo/" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding TrashPhaseText}" Classes="subtle" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Border BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12,9">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <TextBlock Text="Em andamento" Classes="subtle" />
+                                    <TextBlock Grid.Column="1" Text="{Binding CurrentOperationText}" Classes="mono" TextTrimming="LeadingCharacterEllipsis" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                <Button Classes="ghost" Command="{Binding ExportReportCommand}" ToolTip.Tip="Exportar a análise/resultado em CSV">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconExport}" Classes="small" />
-                        <TextBlock Text="Exportar CSV" />
+                    <Border Grid.Row="1" Classes="card" Margin="0,14,0,0">
+                        <Grid RowDefinitions="Auto,*">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="16,10">
+                                <TextBlock Text="Atividade" Classes="section" FontSize="14" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Classes="chip" Classes.active="{Binding !ShowOnlyProblems}"
+                                        Command="{Binding SetShowOnlyProblemsCommand}" CommandParameter="{x:False}" Content="Tudo" />
+                                <Button Grid.Column="2" Classes="chip" Classes.active="{Binding ShowOnlyProblems}"
+                                        Command="{Binding SetShowOnlyProblemsCommand}" CommandParameter="{x:True}">
+                                    <TextBlock Text="{Binding ProblemLogCount, StringFormat='Avisos e erros · {0}'}" />
+                                </Button>
+                            </Grid>
+                            <ListBox Grid.Row="1" Classes="log" ItemsSource="{Binding ActivityLogs}" Background="Transparent"
+                                     BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="0,1,0,0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:LogEntry">
+                                        <Grid ColumnDefinitions="72,*" ColumnSpacing="10">
+                                            <TextBlock Text="{Binding Time}" Classes="subtle" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" Classes="mono"
+                                                       Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ============================== Tela 4: resultado ============================== -->
+                <ScrollViewer IsVisible="{Binding IsResultScreen}" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="24,20" Spacing="14">
+                        <Border Classes="card" Padding="24,20">
+                            <StackPanel Spacing="20">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="16">
+                                    <Panel Width="48" Height="48">
+                                        <Border CornerRadius="24" Background="{DynamicResource OsConflictSoftBrush}" IsVisible="{Binding ResultHasProblems}">
+                                            <PathIcon Data="{StaticResource IconWarning}" Width="22" Height="22" Classes="conflict" />
+                                        </Border>
+                                        <Border CornerRadius="24" Background="{DynamicResource OsSuccessSoftBrush}" IsVisible="{Binding ResultIsClean}">
+                                            <PathIcon Data="{StaticResource IconCheck}" Width="24" Height="24" Foreground="{DynamicResource OsSuccessBrush}" />
+                                        </Border>
+                                    </Panel>
+                                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ResultTitle}" FontSize="22" FontWeight="Bold" />
+                                        <TextBlock Text="{Binding ResultSubtitle}" Classes="subtle" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Classes="secondary" Command="{Binding BackToPlanCommand}" VerticalAlignment="Center" Content="Ver arquivos" />
+                                    <Button Grid.Column="3" Classes="accent primary" Command="{Binding StartSyncCommand}" VerticalAlignment="Center"
+                                            IsVisible="{Binding ResultHasProblems}" Content="{Binding RetryText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="12">
+                                    <Border Classes="inset" Padding="14,12">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="number" Text="{Binding LastResult.Copied, StringFormat='{}{0:N0}', FallbackValue=0}" />
+                                            <TextBlock Classes="subtle" Text="copiados" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Classes="inset" Padding="14,12">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="number" Text="{Binding LastResult.Replaced, StringFormat='{}{0:N0}', FallbackValue=0}" />
+                                            <TextBlock Classes="subtle" Text="substituídos" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Classes="inset" Padding="14,12">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="number" Text="{Binding LastResult.Ignored, StringFormat='{}{0:N0}', FallbackValue=0}" />
+                                            <TextBlock Classes="subtle" Text="mantidos no destino" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="3" Classes="inset" Padding="14,12">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="number" Text="{Binding LastResult.Trashed, StringFormat='{}{0:N0}', FallbackValue=0}" />
+                                            <TextBlock Classes="subtle" Text="movidos p/ lixo/" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="4" Classes="inset" Classes.danger-tile="{Binding HasFailedItems}" Padding="14,12">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="number" Classes.error="{Binding HasFailedItems}" Text="{Binding LastResult.Failed, StringFormat='{}{0:N0}', FallbackValue=0}" />
+                                            <TextBlock Text="falhas" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card" IsVisible="{Binding HasFailedItems}">
+                            <StackPanel>
+                                <TextBlock Text="O que não foi feito" Classes="section" FontSize="14" Margin="16,12" />
+                                <ItemsControl ItemsSource="{Binding FailedItems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:SyncItem">
+                                            <Border BorderBrush="{DynamicResource OsDividerBrush}" BorderThickness="0,1,0,0" Padding="16,10">
+                                                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                                                    <TextBlock Text="{Binding RelativePath}" Classes="mono" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding RelativePath}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Classes="error" TextWrapping="Wrap" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+                            <Button Classes="tile" Command="{Binding OpenTrashFolderCommand}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Abrir lixo/" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Arquivos que existiam só no destino." />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Classes="tile" Command="{Binding OpenOldFolderCommand}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Abrir old/" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Versões substituídas, com data e hora no nome." />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="2" Classes="tile" Command="{Binding ExportReportCommand}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Exportar relatório CSV" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Plano e resultado, arquivo por arquivo." />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="3" Classes="tile" Command="{Binding ScanCommand}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Nova análise (F5)" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Confere se origem e destino ficaram iguais." />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
                     </StackPanel>
-                </Button>
-                <Button Classes="ghost" Command="{Binding RestoreTrashCommand}" ToolTip.Tip="Escolher arquivos de lixo/ para devolver ao local original">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconRestore}" Classes="small" />
-                        <TextBlock Text="Restaurar de lixo/" />
-                    </StackPanel>
-                </Button>
-                <Button Classes="ghost" Command="{Binding OpenTrashFolderCommand}" ToolTip.Tip="Abrir destino/lixo/">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconTrash}" Classes="small" />
-                        <TextBlock Text="lixo/" />
-                    </StackPanel>
-                </Button>
-                <Button Classes="ghost" Command="{Binding OpenOldFolderCommand}" ToolTip.Tip="Abrir destino/old/ (versões substituídas)">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconHistory}" Classes="small" />
-                        <TextBlock Text="old/" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
+                </ScrollViewer>
+            </Panel>
         </Grid>
     </Grid>
 </Window>
