@@ -165,7 +165,11 @@ public class ProfileAndLayoutTests : IDisposable
         profile.LastFailedCount = 3;
         item.RefreshFromLastRun();
         Assert.Equal(ProfileStatusKind.Problem, item.Status);
-        Assert.StartsWith("3 falha(s)", item.Subtitle);
+        Assert.StartsWith("3 falhas ·", item.Subtitle);
+
+        profile.LastFailedCount = 1;
+        item.RefreshFromLastRun();
+        Assert.StartsWith("1 falha ·", item.Subtitle);
 
         item.ShowPlanReady(10, 2);
         Assert.Equal(ProfileStatusKind.PlanReady, item.Status);

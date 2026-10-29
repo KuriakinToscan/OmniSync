@@ -125,7 +125,7 @@ public partial class ProfileItemViewModel : ObservableObject
                 break;
             case ProfileRunOutcome.Failures:
                 Status = ProfileStatusKind.Problem;
-                Subtitle = $"{Profile.LastFailedCount} falha(s) · {when}";
+                Subtitle = $"{Profile.LastFailedCount} {(Profile.LastFailedCount == 1 ? "falha" : "falhas")} · {when}";
                 break;
             default:
                 Status = ProfileStatusKind.Problem;

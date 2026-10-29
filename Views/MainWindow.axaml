@@ -749,7 +749,7 @@
                                     <Border Grid.Column="4" Classes="inset" Classes.danger-tile="{Binding HasFailedItems}" Padding="14,12">
                                         <StackPanel Spacing="2">
                                             <TextBlock Classes="number" Classes.error="{Binding HasFailedItems}" Text="{Binding LastResult.Failed, StringFormat='{}{0:N0}', FallbackValue=0}" />
-                                            <TextBlock Text="falhas" />
+                                            <TextBlock Classes.subtle="{Binding !HasFailedItems}" Text="falhas" />
                                         </StackPanel>
                                     </Border>
                                 </Grid>
