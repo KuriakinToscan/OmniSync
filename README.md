@@ -65,13 +65,13 @@ dotnet run --project OmniSync.csproj -- --self-test
 
 **No Windows (`win-x64`):**
 ```powershell
-dotnet publish OmniSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/win-x64
+dotnet publish OmniSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish/win-x64
 ```
 O executável final estará em `publish/win-x64/OmniSync.exe` (também acionável pelo atalho `Iniciar OmniSync.bat`).
 
 **No Linux (`linux-x64`):**
 ```bash
-dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o publish/linux-x64
+dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish/linux-x64
 chmod +x publish/linux-x64/OmniSync
 ```
 
