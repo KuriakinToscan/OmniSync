@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -35,7 +37,86 @@ public partial class MainWindow : Window
         {
             vm.PickFolderAsync = PickFolderAsync;
             vm.AskConflictResolutionAsync = AskConflictResolutionAsync;
+            vm.ConfirmSyncAsync = ConfirmSyncAsync;
+            vm.PickSaveFileAsync = PickSaveFileAsync;
+            vm.SelectTrashEntriesAsync = SelectTrashEntriesAsync;
+            vm.ConfirmAsync = (title, message, confirmText) => MessageDialog.ShowAsync(this, title, message, confirmText);
         }
+    }
+
+    /// <summary>
+    /// Largura abaixo da qual a árvore de pastas é ocultada para preservar a lista de arquivos.
+    /// </summary>
+    private const double CompactWidth = 1240;
+
+    /// <summary>
+    /// Alterna a classe <c>compact</c> conforme a largura da janela.
+    /// </summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ClientSizeProperty)
+        {
+            Classes.Set("compact", ClientSize.Width < CompactWidth);
+        }
+    }
+
+    /// <summary>
+    /// Salva os pares e as preferências do usuário ao fechar a janela.
+    /// </summary>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (DataContext is MainViewModel vm)
+        {
+            vm.SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// Exibe o diálogo de confirmação do plano de sincronização.
+    /// </summary>
+    private async Task<bool> ConfirmSyncAsync(SyncPlanSummary summary)
+    {
+        var dialogVm = new ConfirmSyncViewModel(summary);
+        var dialog = new ConfirmSyncWindow { DataContext = dialogVm };
+        await dialog.ShowDialog(this);
+        return dialogVm.Result;
+    }
+
+    /// <summary>
+    /// Exibe o diálogo de restauração seletiva de lixo/.
+    /// </summary>
+    private async Task<IReadOnlyList<TrashEntry>?> SelectTrashEntriesAsync(IReadOnlyList<TrashEntry> entries)
+    {
+        var dialogVm = new RestoreViewModel(entries);
+        var dialog = new RestoreWindow { DataContext = dialogVm };
+        await dialog.ShowDialog(this);
+        return dialogVm.Result;
+    }
+
+    /// <summary>
+    /// Abre o seletor nativo para salvar o relatório CSV.
+    /// </summary>
+    /// <param name="suggestedName">Nome de arquivo sugerido.</param>
+    /// <returns>Caminho local escolhido, ou <c>null</c> se cancelado.</returns>
+    private async Task<string?> PickSaveFileAsync(string suggestedName)
+    {
+        var topLevel = GetTopLevel(this);
+        if (topLevel?.StorageProvider == null) return null;
+
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Exportar relatório",
+            SuggestedFileName = suggestedName,
+            DefaultExtension = "csv",
+            ShowOverwritePrompt = true,
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("CSV (separado por ponto e vírgula)") { Patterns = new[] { "*.csv" } }
+            }
+        });
+        return file?.TryGetLocalPath();
     }
 
     /// <summary>

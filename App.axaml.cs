@@ -7,6 +7,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using OmniSync.Models;
+using OmniSync.Services;
 using OmniSync.ViewModels;
 using OmniSync.Views;
 
@@ -48,7 +49,8 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var vm = new MainViewModel();
+            bool isSelfTest = desktop.Args != null && desktop.Args.Contains("--self-test");
+            var vm = new MainViewModel(new SyncEngine(), loadSettings: !isSelfTest);
             var mainWin = new MainWindow
             {
                 DataContext = vm,
@@ -56,11 +58,13 @@ public partial class App : Application
             desktop.MainWindow = mainWin;
 
             // Modo de verificação automatizada de ponta a ponta (--self-test)
-            if (desktop.Args != null && desktop.Args.Contains("--self-test"))
+            if (isSelfTest)
             {
                 mainWin.Opened += async (_, _) =>
                 {
-                    var testRoot = Path.Combine(AppContext.BaseDirectory, "SelfTestTemp_" + Guid.NewGuid().ToString("N"));
+                    var testRoot = Path.Combine(Path.GetTempPath(), "OmniSyncSelfTest_" + Guid.NewGuid().ToString("N"));
+                    var selfTestLog = Path.Combine(AppPaths.DataDirectory, "selftest.log");
+                    Directory.CreateDirectory(AppPaths.DataDirectory);
                     try
                     {
                         var src = Path.Combine(testRoot, "Origem");
@@ -77,18 +81,23 @@ public partial class App : Application
                         vm.SourcePath = src;
                         vm.DestinationPath = dstParent;
                         vm.AskConflictResolutionAsync = _ => Task.FromResult((ConflictResolution.Replace, true));
+                        vm.ConfirmSyncAsync = _ => Task.FromResult(true);
 
                         await vm.ScanCommand.ExecuteAsync(null);
                         await vm.StartSyncCommand.ExecuteAsync(null);
 
+                        bool ok = vm.ErrorCount == 0 &&
+                                  File.Exists(Path.Combine(dstSub, "novo.txt")) &&
+                                  File.ReadAllText(Path.Combine(dstSub, "conflito.txt")) == "versao_nova" &&
+                                  File.Exists(Path.Combine(dstSub, "lixo", "orfao.txt"));
                         File.WriteAllText(
-                            Path.Combine(AppContext.BaseDirectory, "selftest.log"),
-                            $"SELF_TEST_OK: Dest={vm.DestinationPath}, New={vm.NewCount}, Conflict={vm.ConflictCount}, Trash={vm.TrashCount}, Status={vm.StatusMessage}");
+                            selfTestLog,
+                            $"{(ok ? "SELF_TEST_OK" : "SELF_TEST_FAIL")}: Dest={vm.DestinationPath}, New={vm.NewCount}, Conflict={vm.ConflictCount}, Trash={vm.TrashCount}, Status={vm.StatusMessage}");
                     }
                     catch (Exception ex)
                     {
                         Program.LogCrash("SelfTest", ex);
-                        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "selftest.log"), "SELF_TEST_FAIL: " + ex);
+                        File.WriteAllText(selfTestLog, "SELF_TEST_FAIL: " + ex);
                     }
                     finally
                     {

@@ -49,3 +49,29 @@ public enum ConflictResolution
     /// </summary>
     Ignore
 }
+
+/// <summary>
+/// Indica qual lado de um conflito possui a versão modificada mais recentemente.
+/// </summary>
+public enum ConflictDirection
+{
+    /// <summary>
+    /// Não se aplica (o item não é conflito ou falta data em um dos lados).
+    /// </summary>
+    None,
+
+    /// <summary>
+    /// A versão da Origem é mais recente que a do Destino.
+    /// </summary>
+    SourceNewer,
+
+    /// <summary>
+    /// A versão do Destino é mais recente que a da Origem.
+    /// </summary>
+    DestinationNewer,
+
+    /// <summary>
+    /// As datas de modificação coincidem (dentro da tolerância), mas o conteúdo difere.
+    /// </summary>
+    SameTime
+}

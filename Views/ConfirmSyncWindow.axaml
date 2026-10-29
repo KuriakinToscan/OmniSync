@@ -1,0 +1,92 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OmniSync.ViewModels"
+        x:Class="OmniSync.Views.ConfirmSyncWindow"
+        x:DataType="vm:ConfirmSyncViewModel"
+        Icon="/Assets/omnisync.ico"
+        Title="Revisar antes de sincronizar"
+        Width="600" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource OsCardBrush}"
+        CanResize="False">
+
+    <StackPanel>
+        <StackPanel Margin="24,22,24,6" Spacing="6">
+            <TextBlock Text="Revise antes de sincronizar" FontSize="20" FontWeight="Bold" />
+            <TextBlock Classes="mono caption" TextWrapping="Wrap" Text="{Binding RouteText}" />
+        </StackPanel>
+
+        <StackPanel Margin="24,6,24,14">
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch new" />
+                <TextBlock Grid.Column="1" Text="Copiar arquivos novos" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.NewCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="{Binding Summary.NewBytesFormatted}" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch conflict" />
+                <TextBlock Grid.Column="1" Text="Substituir (a versão atual vai para old/)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.ReplaceCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="{Binding Summary.ReplaceBytesFormatted}" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch identical" />
+                <TextBlock Grid.Column="1" Text="Manter o destino (conflitos ignorados)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.IgnoreCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="—" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" IsVisible="{Binding HasAsk}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46" IsVisible="{Binding HasAsk}">
+                <PathIcon Data="{StaticResource IconWarning}" Classes="small warning" />
+                <TextBlock Grid.Column="1" Text="Conflitos sem decisão (perguntar na hora)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.AskCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="—" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Border Height="1" Background="{DynamicResource OsDividerBrush}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,120" ColumnSpacing="12" MinHeight="46">
+                <Border Classes="swatch orphan" />
+                <TextBlock Grid.Column="1" Text="Mover para lixo/ (existem só no destino)" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{Binding Summary.OrphanCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="{Binding OrphanShareText}" Classes="subtle" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </StackPanel>
+
+        <Border Classes="warning-banner" Margin="24,0,24,14" IsVisible="{Binding Summary.HasWarnings}">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Avisos da análise" FontWeight="SemiBold" FontSize="12" />
+                <ItemsControl ItemsSource="{Binding Summary.Warnings}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,1" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <Border Classes="danger-banner" Margin="24,0,24,16" IsVisible="{Binding Summary.IsMassOrphan}">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                    <TextBlock Grid.Column="1" TextWrapping="Wrap">
+                        <Run Text="Grande parte do destino iria para lixo/." FontWeight="Bold" />
+                        <Run Text="Isso costuma indicar origem ou destino trocados, ou a subpasta errada." />
+                    </TextBlock>
+                </Grid>
+                <CheckBox IsChecked="{Binding MassOrphanAcknowledged}" Margin="26,0,0,0">
+                    <TextBlock Text="{Binding MassOrphanText}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                </CheckBox>
+            </StackPanel>
+        </Border>
+
+        <Border Background="{DynamicResource OsPanelBrush}" BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="0,1,0,0" Padding="24,14">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="Nenhum arquivo é excluído." Classes="subtle" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Content="Voltar ao plano" Command="{Binding CancelCommand}" IsCancel="True" MinHeight="40" />
+                <Button Grid.Column="2" Classes="accent primary" Content="Sincronizar agora" Command="{Binding ConfirmCommand}" />
+            </Grid>
+        </Border>
+    </StackPanel>
+</Window>

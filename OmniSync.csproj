@@ -4,7 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.0.0</Version>
+    <ApplicationIcon>Assets\omnisync.ico</ApplicationIcon>
+    <Version>1.2.0</Version>
     <Authors>OmniSync Contributors</Authors>
     <Description>Sincronizador gráfico multiplataforma (Windows e Linux) para drives locais e compartilhamentos de rede/NAS com preservação de versões (old/) e lixeira inteligente (lixo/).</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
