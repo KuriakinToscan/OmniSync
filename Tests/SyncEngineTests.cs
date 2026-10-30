@@ -504,4 +504,54 @@ public class SyncEngineTests : IDisposable
         update.Apply();
         Assert.True(items[0].IsProcessed);
     }
+
+    /// <summary>
+    /// Com a verificação de cópias (padrão), cópias e substituições conferem por SHA-256 com a origem,
+    /// inclusive arquivos maiores que o buffer de cópia, e o log registra a conferência.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteSync_ShouldVerifyCopiesBySha256()
+    {
+        var big = new byte[5 * 1024 * 1024 + 123];
+        new Random(42).NextBytes(big);
+        File.WriteAllBytes(Path.Combine(_sourceDir, "grande.bin"), big);
+        File.WriteAllText(Path.Combine(_sourceDir, "conflito.txt"), "versao da origem");
+        File.WriteAllText(Path.Combine(_destDir, "conflito.txt"), "destino");
+        File.SetLastWriteTimeUtc(Path.Combine(_destDir, "conflito.txt"), DateTime.UtcNow.AddHours(-2));
+
+        Assert.True(_engine.VerifyCopies);
+        var items = await ScanAsync();
+        var logs = new List<string>();
+        var result = await _engine.ExecuteSyncAsync(items, _destDir, _ => Task.FromResult(ConflictResolution.Replace), null, null,
+            new InlineLogger(logs), CancellationToken.None);
+
+        Assert.False(result.HasFailures);
+        Assert.Equal(big, File.ReadAllBytes(Path.Combine(_destDir, "grande.bin")));
+        Assert.Equal("versao da origem", File.ReadAllText(Path.Combine(_destDir, "conflito.txt")));
+        Assert.Contains(logs, l => l.StartsWith("Verificação: 2 cópia(s) conferida(s)"));
+        Assert.Empty(Directory.GetFiles(_destDir, "*" + PathHelper.TempSuffix, SearchOption.AllDirectories));
+    }
+
+    /// <summary>
+    /// Com a verificação desligada, a cópia funciona igual e o log não menciona conferência.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteSync_WithoutVerification_ShouldNotLogVerification()
+    {
+        File.WriteAllText(Path.Combine(_sourceDir, "a.txt"), "a");
+        _engine.VerifyCopies = false;
+        var items = await ScanAsync();
+        var logs = new List<string>();
+        var result = await _engine.ExecuteSyncAsync(items, _destDir, _ => Task.FromResult(ConflictResolution.Replace), null, null,
+            new InlineLogger(logs), CancellationToken.None);
+
+        Assert.Equal(1, result.Copied);
+        Assert.DoesNotContain(logs, l => l.StartsWith("Verificação"));
+    }
+
+    /// <summary>Logger síncrono para os testes (Progress&lt;T&gt; entregaria as mensagens de forma assíncrona).</summary>
+    private sealed class InlineLogger(List<string> sink) : IProgress<string>
+    {
+        public void Report(string value) => sink.Add(value);
+    }
 }

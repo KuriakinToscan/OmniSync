@@ -35,7 +35,8 @@ A área principal tem quatro telas:
 
 1. **Configuração**: origem, destino e opções. Aparece enquanto não há análise.
    - **Criar subpasta com o nome da origem** *(marcado por padrão)*: com Origem `E:\Fotos` e Destino `G:\`, a sincronização ocorre em `G:\Fotos`, sem afetar outras pastas de `G:\`. O campo guarda só a pasta escolhida (`G:\`); a linha **Sincroniza em** abaixo dele mostra o destino efetivo.
-   - **Verificar conteúdo (SHA-256)**: arquivos de mesmo tamanho são comparados pelo conteúdo, e não pela data. Mais lento, mais seguro.
+   - **Verificar conteúdo (SHA-256)**: arquivos de mesmo tamanho são comparados pelo conteúdo, e não pela data. Mais lento, porque lê os arquivos inteiros dos dois lados; útil quando as datas não são confiáveis. *(desmarcado por padrão)*
+   - Independentemente dessa opção, **toda cópia e substituição é conferida por SHA-256** antes de ocupar o lugar no destino: se a cópia não bater com a origem, o aplicativo tenta de novo e, se persistir, registra a falha sem tocar no arquivo do destino.
    - **Tolerar 1 h (horário de verão)**: considera iguais arquivos cuja data difere exatamente 1 hora. Útil com pendrives e HDs em FAT/exFAT, que gravam hora local.
    - **Ignorar**: padrões separados por ponto e vírgula, aplicados ao nome de arquivos e pastas nos dois lados (`*` e `?` como curingas). Padrão: `Thumbs.db; desktop.ini; .DS_Store; ~$*`.
 2. **Plano analisado**:

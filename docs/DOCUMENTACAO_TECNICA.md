@@ -167,6 +167,11 @@ O método retorna `SyncResult` (copiados, substituídos, movidos, ignorados, pul
 ### 4.3. Verificação profunda (SHA-256)
 Pares de mesmo tamanho são agrupados e verificados com `Parallel.ForEachAsync` (paralelismo = mín(núcleos, 4)). Em cada par, origem e destino são lidos simultaneamente (`SHA256.HashDataAsync`).
 
+### 4.4. Verificação das cópias
+Com `SyncEngine.VerifyCopies` (padrão `true`), `CopyToTempWithRetryAsync` calcula o SHA-256 da origem durante a própria leitura da cópia (`IncrementalHash`, sem leitura extra da origem), grava o temporário no disco (`Flush(flushToDisk: true)`), relê o temporário e compara os hashes antes da renomeação. Divergência gera `CopyVerificationException` (tratada como transitória: até 3 tentativas); se persistir, o item falha e o arquivo do destino permanece intacto. Custo: uma leitura adicional de cada arquivo copiado no destino.
+
+Limitação: a releitura pode ser atendida pelo cache de disco do sistema operacional; ela detecta erros no caminho de leitura/gravação do processo, alteração da origem durante a cópia e falhas de rede/USB que corrompam o fluxo, mas não garante que o setor físico do disco foi gravado corretamente.
+
 ### 4.4. Proteção contra sincronização acidental
 - **Subpasta por nome da origem** (`ResolveEffectiveDestinationPath`): `E:\Fotos` + `G:\` → `G:\Fotos`.
 - **Pastas aninhadas bloqueadas**: destino dentro da origem ou origem dentro do destino lançam `InvalidOperationException`.

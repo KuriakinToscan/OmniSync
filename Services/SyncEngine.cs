@@ -31,6 +31,13 @@ public class SyncEngine : ISyncEngine
     private const int MaxRetries = 3;
 
     /// <summary>
+    /// Confere cada cópia por SHA-256 antes de ela ocupar o lugar no destino: o hash da origem é calculado
+    /// durante a leitura da cópia e comparado com o do arquivo temporário relido do destino.
+    /// Ligado por padrão; os testes podem desligar.
+    /// </summary>
+    public bool VerifyCopies { get; set; } = true;
+
+    /// <summary>
     /// Tolerância máxima de diferença de timestamp (2 segundos) para compatibilidade entre sistemas de arquivos
     /// distintos (NTFS, ext4, Samba/NAS e FAT/exFAT).
     /// </summary>
@@ -429,7 +436,7 @@ public class SyncEngine : ISyncEngine
                         try
                         {
                             logger?.Report($"[SUBSTITUIR] {item.RelativePath}");
-                            await ReplaceFileAsync(item, normalizedDestDir, oldDir, OnBytesCopied, cancellationToken);
+                            await ReplaceFileAsync(item, normalizedDestDir, oldDir, OnBytesCopied, VerifyCopies, cancellationToken);
                             result.Replaced++;
                             result.BytesCopied += item.SourceSize;
                             Update(item, "Substituído (anterior em old/)", processed: true, error: false, ConflictResolution.Replace);
@@ -449,7 +456,7 @@ public class SyncEngine : ISyncEngine
                         try
                         {
                             logger?.Report($"[NOVO] Copiando: {item.RelativePath}");
-                            await CopyNewFileAsync(item, OnBytesCopied, cancellationToken);
+                            await CopyNewFileAsync(item, OnBytesCopied, VerifyCopies, cancellationToken);
                             result.Copied++;
                             result.BytesCopied += item.SourceSize;
                             Update(item, "Copiado", processed: true, error: false);
@@ -481,6 +488,11 @@ public class SyncEngine : ISyncEngine
             result.Duration = overallStopwatch.Elapsed;
             currentFileName = string.Empty;
             ReportProgress(force: true);
+
+            if (VerifyCopies && result.Copied + result.Replaced > 0)
+            {
+                logger?.Report($"Verificação: {result.Copied + result.Replaced} cópia(s) conferida(s) com a origem por SHA-256 antes de ocupar o lugar no destino.");
+            }
 
             logger?.Report(result.HasFailures
                 ? $"[ERRO] Sincronização concluída com {result.Failed} falha(s): {result.Summary}."
@@ -744,7 +756,7 @@ public class SyncEngine : ISyncEngine
     /// Copia um arquivo novo para o destino via arquivo temporário e renomeação. Nunca sobrescreve:
     /// se um arquivo surgiu no destino depois da análise, a operação falha com mensagem explicativa.
     /// </summary>
-    private static async Task CopyNewFileAsync(SyncItem item, Action<long> onBytesCopied, CancellationToken cancellationToken)
+    private static async Task CopyNewFileAsync(SyncItem item, Action<long> onBytesCopied, bool verify, CancellationToken cancellationToken)
     {
         var destFile = item.DestinationFullPath!;
         if (File.Exists(destFile) || Directory.Exists(destFile))
@@ -753,7 +765,7 @@ public class SyncEngine : ISyncEngine
         }
 
         var tempFile = destFile + PathHelper.TempSuffix;
-        await CopyToTempWithRetryAsync(item.SourceFullPath!, tempFile, onBytesCopied, cancellationToken);
+        await CopyToTempWithRetryAsync(item.SourceFullPath!, tempFile, onBytesCopied, verify, cancellationToken);
 
         try
         {
@@ -776,12 +788,13 @@ public class SyncEngine : ISyncEngine
         string destRoot,
         string oldDir,
         Action<long> onBytesCopied,
+        bool verify,
         CancellationToken cancellationToken)
     {
         var destFile = item.DestinationFullPath!;
         var tempFile = destFile + PathHelper.TempSuffix;
 
-        await CopyToTempWithRetryAsync(item.SourceFullPath!, tempFile, onBytesCopied, cancellationToken);
+        await CopyToTempWithRetryAsync(item.SourceFullPath!, tempFile, onBytesCopied, verify, cancellationToken);
 
         string? archivedPath = null;
         try
@@ -811,11 +824,15 @@ public class SyncEngine : ISyncEngine
     /// Copia um arquivo para um caminho temporário em blocos de 2 MB, com reporte contínuo de bytes,
     /// pré-alocação, verificação de tamanho final, preservação da data de modificação e retentativa
     /// apenas para falhas transitórias. Em qualquer falha definitiva ou cancelamento, o temporário é removido.
+    /// Com <paramref name="verify"/>, o temporário é gravado no disco (flush), relido e comparado por SHA-256
+    /// com os bytes lidos da origem; divergência conta como falha transitória (nova tentativa) e, se persistir,
+    /// a operação falha sem tocar no arquivo do destino.
     /// </summary>
     private static async Task CopyToTempWithRetryAsync(
         string sourceFile,
         string tempFile,
         Action<long> onBytesCopied,
+        bool verify,
         CancellationToken cancellationToken)
     {
         var destDirectory = Path.GetDirectoryName(tempFile);
@@ -842,6 +859,7 @@ public class SyncEngine : ISyncEngine
                 var lastWriteUtc = sourceInfo.LastWriteTimeUtc;
 
                 var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+                using var sourceHash = verify ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
                 try
                 {
                     await using var srcStream = new FileStream(sourceFile, new FileStreamOptions
@@ -865,6 +883,7 @@ public class SyncEngine : ISyncEngine
                     int bytesRead;
                     while ((bytesRead = await srcStream.ReadAsync(buffer.AsMemory(0, BufferSize), cancellationToken)) > 0)
                     {
+                        sourceHash?.AppendData(buffer, 0, bytesRead);
                         await dstStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
                         bytesAddedInCurrentAttempt += bytesRead;
                         onBytesCopied(bytesRead);
@@ -875,10 +894,26 @@ public class SyncEngine : ISyncEngine
                         throw new IOException(
                             $"O arquivo de origem mudou durante a cópia ({bytesAddedInCurrentAttempt} de {expectedLength} bytes).");
                     }
+
+                    if (verify)
+                    {
+                        // Garante que os dados saíram do buffer do processo e do sistema antes da releitura
+                        dstStream.Flush(flushToDisk: true);
+                    }
                 }
                 finally
                 {
                     ArrayPool<byte>.Shared.Return(buffer);
+                }
+
+                if (sourceHash != null)
+                {
+                    var expected = sourceHash.GetHashAndReset();
+                    var actual = await ComputeSha256Async(tempFile, cancellationToken);
+                    if (!CryptographicOperations.FixedTimeEquals(expected, actual))
+                    {
+                        throw new CopyVerificationException();
+                    }
                 }
 
                 // Preserva a data/hora de modificação original para futuras comparações diferenciais
@@ -887,6 +922,7 @@ public class SyncEngine : ISyncEngine
             }
             catch (Exception ex) when (attempt < MaxRetries && !cancellationToken.IsCancellationRequested && IsTransient(ex))
             {
+                PathHelper.TryDeleteFile(tempFile);
                 // Estorna os bytes contabilizados na tentativa falha antes de tentar novamente
                 if (bytesAddedInCurrentAttempt > 0)
                 {
@@ -933,5 +969,17 @@ public class SyncEngine : ISyncEngine
             Options = FileOptions.Asynchronous | FileOptions.SequentialScan
         });
         return await SHA256.HashDataAsync(stream, cancellationToken);
+    }
+}
+
+/// <summary>
+/// A cópia gravada no destino não confere com a origem (SHA-256 diferente).
+/// </summary>
+public sealed class CopyVerificationException : IOException
+{
+    /// <summary>Cria a exceção com a mensagem padrão.</summary>
+    public CopyVerificationException()
+        : base("A cópia não confere com a origem (SHA-256 diferente), mesmo após novas tentativas. O arquivo do destino não foi alterado; verifique o disco ou a conexão.")
+    {
     }
 }
