@@ -136,6 +136,10 @@ public static class SettingsService
             profile.SourcePath ??= string.Empty;
             profile.DestinationPath ??= string.Empty;
             profile.ExcludePatterns ??= string.Empty;
+            if (profile.UseSourceFolderNameInDestination)
+            {
+                profile.DestinationPath = StripSourceFolderFromDestination(profile.SourcePath, profile.DestinationPath);
+            }
         }
 
         if (settings.ActiveProfileId.HasValue && settings.Profiles.All(p => p.Id != settings.ActiveProfileId.Value))
@@ -148,6 +152,41 @@ public static class SettingsService
         }
 
         return settings;
+    }
+
+    /// <summary>
+    /// Até a versão 1.2.0, a opção "Criar subpasta com o nome da origem" era gravada no próprio texto do destino
+    /// (<c>G:\Backup</c> virava <c>G:\Backup\Fotos</c>), e desmarcar a opção não a removia. O destino passa a guardar só a
+    /// pasta escolhida; esta função devolve essa pasta. Com a opção ligada, o destino efetivo continua o mesmo,
+    /// porque a subpasta é anexada de novo na resolução.
+    /// </summary>
+    /// <param name="sourcePath">Pasta de Origem.</param>
+    /// <param name="destPath">Destino salvo.</param>
+    /// <returns>Destino sem a subpasta da origem no final, ou o próprio destino quando não termina nela.</returns>
+    public static string StripSourceFolderFromDestination(string sourcePath, string destPath)
+    {
+        static string LastSegment(string path)
+        {
+            var trimmed = path.Trim().TrimEnd('\\', '/');
+            return trimmed[(trimmed.LastIndexOfAny(new[] { '\\', '/' }) + 1)..];
+        }
+
+        if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(destPath)) return destPath;
+        var sourceName = LastSegment(sourcePath);
+        var trimmedDest = destPath.Trim().TrimEnd('\\', '/');
+        int cut = trimmedDest.LastIndexOfAny(new[] { '\\', '/' });
+        if (sourceName.Length == 0 || cut < 0 ||
+            !string.Equals(trimmedDest[(cut + 1)..], sourceName, StringComparison.OrdinalIgnoreCase))
+        {
+            return destPath;
+        }
+
+        var parent = trimmedDest[..cut];
+        // Raízes: "G:" volta a ser "G:\", "" (Unix) volta a ser "/". UNC "\\servidor" sem pasta não é um destino válido.
+        if (parent.Length == 0) return trimmedDest[..1];
+        if (parent.Length == 2 && parent[1] == ':') return parent + trimmedDest[cut];
+        if (parent.TrimStart('\\', '/').Length == 0 || (parent.StartsWith(@"\\") && parent.IndexOf('\\', 2) < 0)) return destPath;
+        return parent;
     }
 
     /// <summary>

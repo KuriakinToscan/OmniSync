@@ -9,6 +9,7 @@
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="24,20" Spacing="14">
         <!-- Cabeçalho -->
         <StackPanel Orientation="Horizontal" Spacing="12">
@@ -87,4 +88,5 @@
                     Padding="18,8" FontWeight="SemiBold" />
         </Grid>
     </StackPanel>
+    </ScrollViewer>
 </Window>

@@ -17,16 +17,17 @@ Diferente de ferramentas tradicionais que apagam ou sobrescrevem arquivos irreve
 2. **Arquivos Novos (Cópia Incremental)**: Arquivos que existem na Origem e ainda não existem no Destino são copiados preservando toda a hierarquia de subpastas e o timestamp original.
 3. **Arquivos Órfãos (`destino/lixo/`)**: Arquivos que não existem mais na Origem, mas permanecem no Destino, **nunca são excluídos** — são movidos para `<Destino>/lixo/<caminho_relativo>` e podem ser restaurados seletivamente, sem sobrescrever nada.
 4. **Arquivos Conflitantes (`destino/old/`)**: Quando um arquivo existe nos dois lados com conteúdo diferente, a prévia indica qual lado é mais recente. A decisão (**Substituir**, **Ignorar** ou **Mais recente vence**) pode ser tomada na própria tabela antes de sincronizar, ou em um modal comparativo durante a execução. Ao substituir, a versão anterior é preservada em `<Destino>/old/<caminho_relativo>`.
-5. **Subpasta Automática por Nome da Origem**: Ao selecionar uma pasta de origem (ex.: `E:\Projetos`) e apontar para a raiz de outro drive (ex.: `G:\`), o OmniSync direciona automaticamente a sincronização para `G:\Projetos`, protegendo as demais pastas do disco de destino.
+5. **Subpasta Automática por Nome da Origem**: Ao selecionar uma pasta de origem (ex.: `E:\Projetos`) e apontar para a raiz de outro drive (ex.: `G:\`), o OmniSync direciona automaticamente a sincronização para `G:\Projetos`, protegendo as demais pastas do disco de destino. O campo Destino guarda só a pasta escolhida; a linha **Sincroniza em** mostra o destino efetivo.
 6. **Escrita atômica e confirmação prévia**: cada cópia é gravada em arquivo temporário e renomeada ao final (cancelamentos e quedas de rede não deixam arquivos truncados). Antes de executar, uma janela resume o plano e exige confirmação explícita quando grande parte do destino iria para `lixo/`.
-7. **Auditoria**: log diário completo em arquivo e exportação do plano/resultado em CSV.
-8. **Pares salvos**: cada combinação de origem, destino e opções fica salva na barra lateral, com o estado da última execução. Trocar de par carrega a configuração e descarta o plano anterior.
+7. **Auditoria**: log diário completo em arquivo, janela **Registro** com filtro e cópia, e exportação do plano/resultado em CSV (cabeçalho ASCII, com colunas de código). Erros do sistema aparecem em português; a mensagem original fica no log.
+8. **Tarefas salvas**: cada combinação de origem, destino e opções fica salva na barra lateral, com o estado da última execução. Trocar de tarefa carrega a configuração e descarta o plano anterior.
+9. **Decisões seguras**: nenhum conflito vem pré-selecionado; decisões tomadas voltam após uma nova análise se os arquivos não mudaram; substituir uma versão mais nova do destino exige confirmação própria na revisão; origem e destino iguais ou aninhados são apontados na hora.
 
 ### Interface
 
 A janela segue o fluxo da sincronização em quatro telas:
 
-1. **Configuração do par**: origem, destino e opções; a análise só lê as pastas.
+1. **Configuração da tarefa**: origem, destino e opções; a análise só lê as pastas.
 2. **Plano analisado**: barra proporcional com filtros por categoria, árvore de **pastas com alterações**, lista de arquivos e painel de detalhes, onde cada conflito é decidido sem diálogo. A barra inferior resume o que vai acontecer.
 3. **Execução**: progresso total e por fase (cópias, conflitos, `lixo/`), velocidade, tempo restante e registro com filtro de avisos e erros.
 4. **Resultado**: balanço, falhas com o motivo, nova tentativa e atalhos para `lixo/`, `old/` e o relatório CSV.
@@ -65,13 +66,13 @@ dotnet run --project OmniSync.csproj -- --self-test
 
 **No Windows (`win-x64`):**
 ```powershell
-dotnet publish OmniSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/win-x64
+dotnet publish OmniSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish/win-x64
 ```
 O executável final estará em `publish/win-x64/OmniSync.exe` (também acionável pelo atalho `Iniciar OmniSync.bat`).
 
 **No Linux (`linux-x64`):**
 ```bash
-dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o publish/linux-x64
+dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish/linux-x64
 chmod +x publish/linux-x64/OmniSync
 ```
 
@@ -86,7 +87,7 @@ OmniSync/
 │   ├── SyncActionType.cs       # Tipos de ação, resolução e direção do conflito
 │   ├── SyncContracts.cs        # Opções/resultado da varredura, atualizações de item, balanço, lixo/
 │   ├── SyncItem.cs             # Representação observável de cada arquivo analisado
-│   ├── SyncProfile.cs          # Par salvo: origem, destino, opções e última execução
+│   ├── SyncProfile.cs          # Tarefa salva: origem, destino, opções e última execução
 │   └── SyncProgressReport.cs   # Telemetria de progresso, velocidade (MB/s) e ETA
 ├── Services/                   # Regras de negócio, sem dependência da interface
 │   ├── ISyncEngine.cs          # Interface do motor de sincronização
@@ -94,12 +95,12 @@ OmniSync/
 │   ├── RestoreService.cs       # Restauração não destrutiva de lixo/
 │   ├── PathHelper.cs           # Comparação de caminhos por SO e movimentações seguras
 │   ├── FileLogService.cs       # Log diário em arquivo
-│   ├── SettingsService.cs      # Pares salvos (JSON) e migração do formato 1.1
+│   ├── SettingsService.cs      # Tarefas salvas (JSON) e migração do formato 1.1
 │   ├── ReportExporter.cs       # Exportação CSV
 │   └── AppPaths.cs             # Pasta de dados por usuário
 ├── ViewModels/                 # Camada MVVM de apresentação e comandos
-│   ├── MainViewModel.cs        # Pares, telas, análise, confirmação, execução, filtros, restauração
-│   ├── ProfileItemViewModel.cs # Item da barra lateral de pares
+│   ├── MainViewModel.cs        # Tarefas, telas, análise, confirmação, execução, filtros, restauração
+│   ├── ProfileItemViewModel.cs # Item da barra lateral de tarefas
 │   ├── FolderTree.cs           # Árvore "pastas com alterações"
 │   ├── ConflictDialogViewModel.cs / ConfirmSyncViewModel.cs / RestoreViewModel.cs
 │   ├── UiBatchQueue.cs         # Entrega em lote de log e status à thread de UI

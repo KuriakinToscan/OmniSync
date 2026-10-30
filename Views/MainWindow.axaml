@@ -28,38 +28,24 @@
                     <TextBlock Text="OmniSync" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="/" Classes="subtle" Margin="10,0,4,0" VerticalAlignment="Center" />
-                <TextBox Grid.Column="2" Classes="inline-edit" Text="{Binding ProfileName}" Width="300"
-                         VerticalAlignment="Center" IsEnabled="{Binding CanManageProfiles}"
-                         ToolTip.Tip="Nome deste par (clique para renomear)"
-                         AutomationProperties.Name="Nome do par" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <TextBox x:Name="ProfileNameBox" Classes="inline-edit" Text="{Binding ProfileName}" MinWidth="60" MaxWidth="360"
+                             VerticalAlignment="Center" IsEnabled="{Binding CanManageProfiles}"
+                             ToolTip.Tip="Nome desta tarefa (clique para renomear; salva enquanto você digita)"
+                             AutomationProperties.Name="Nome da tarefa" />
+                    <Button Classes="icon-only" Click="OnRenameTaskClick" IsEnabled="{Binding CanManageProfiles}"
+                            ToolTip.Tip="Renomear tarefa" AutomationProperties.Name="Renomear tarefa">
+                        <PathIcon Data="{StaticResource IconEdit}" Classes="small" />
+                    </Button>
+                </StackPanel>
 
                 <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Classes="secondary" ToolTip.Tip="Registro das operações desta sessão" AutomationProperties.Name="Registro">
+                    <Button Classes="secondary" ToolTip.Tip="Registro das operações desta sessão" AutomationProperties.Name="Registro"
+                            Click="OnShowLogClick">
                         <StackPanel Orientation="Horizontal" Spacing="7">
                             <PathIcon Data="{StaticResource IconList}" Classes="small" />
                             <TextBlock Text="Registro" />
                         </StackPanel>
-                        <Button.Flyout>
-                            <Flyout Placement="BottomEdgeAlignedRight">
-                                <Grid Width="560" Height="440" RowDefinitions="Auto,*">
-                                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                                        <TextBlock Text="Registro da sessão" Classes="section" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Classes="link" Content="Abrir pasta de logs" Command="{Binding OpenLogsFolderCommand}" />
-                                    </Grid>
-                                    <ListBox Grid.Row="1" Classes="log" ItemsSource="{Binding Logs}" Background="Transparent">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:LogEntry">
-                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                                    <TextBlock Text="{Binding Time}" Classes="subtle mono" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" Classes="mono"
-                                                               Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-                                </Grid>
-                            </Flyout>
-                        </Button.Flyout>
                     </Button>
                     <Button Classes="secondary" Command="{Binding OpenLogsFolderCommand}"
                             ToolTip.Tip="Abrir a pasta com os logs completos de todas as execuções">
@@ -74,13 +60,13 @@
 
         <Grid Grid.Row="1" ColumnDefinitions="248,*">
 
-            <!-- ============================== Barra lateral: pares salvos ============================== -->
+            <!-- ============================== Barra lateral: tarefas ============================== -->
             <Border Grid.Column="0" Classes="sidebar" Padding="12,14">
                 <DockPanel>
                     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="8,0,0,8">
-                        <TextBlock Text="PARES SALVOS" Classes="eyebrow" VerticalAlignment="Center" />
+                        <TextBlock Text="TAREFAS" Classes="eyebrow" VerticalAlignment="Center" />
                         <Button Grid.Column="1" Classes="icon-only" Command="{Binding NewProfileCommand}"
-                                ToolTip.Tip="Novo par (Ctrl+N)" AutomationProperties.Name="Novo par">
+                                ToolTip.Tip="Nova tarefa (Ctrl+N)" AutomationProperties.Name="Nova tarefa">
                             <PathIcon Data="{StaticResource IconPlus}" Classes="small accent-text" />
                         </Button>
                     </Grid>
@@ -113,13 +99,23 @@
                     </StackPanel>
 
                     <ListBox Classes="profiles" ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile}"
-                             IsEnabled="{Binding CanManageProfiles}" AutomationProperties.Name="Pares salvos">
+                             IsEnabled="{Binding CanManageProfiles}" AutomationProperties.Name="Tarefas">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem Button.delete-task">
+                                <Setter Property="Opacity" Value="0" />
+                            </Style>
+                            <Style Selector="ListBoxItem:pointerover Button.delete-task, ListBoxItem:selected Button.delete-task">
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </ListBox.Styles>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:ProfileItemViewModel">
-                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="2" Background="Transparent">
+                                <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="2" Background="Transparent"
+                                      DoubleTapped="OnTaskDoubleTapped" ToolTip.Tip="Duplo clique para renomear">
                                     <Grid.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Remover par"
+                                            <MenuItem Header="Renomear" Click="OnRenameTaskClick" />
+                                            <MenuItem Header="Excluir tarefa"
                                                       Command="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).DeleteProfileCommand}"
                                                       CommandParameter="{Binding}" />
                                         </ContextMenu>
@@ -129,6 +125,12 @@
                                             Classes.success="{Binding IsSuccess}" Classes.error="{Binding IsProblem}" />
                                     <TextBlock Grid.Column="1" Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="2" Grid.RowSpan="2" Classes="icon-only delete-task" VerticalAlignment="Top" Margin="0,-2,-4,0"
+                                            Command="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).DeleteProfileCommand}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip.Tip="Excluir tarefa (os arquivos não são tocados)" AutomationProperties.Name="Excluir tarefa">
+                                        <PathIcon Data="{StaticResource IconClose}" Classes="small" Width="10" Height="10" />
+                                    </Button>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -138,7 +140,7 @@
 
             <Panel Grid.Column="1">
 
-                <!-- ============================== Tela 1: configuração do par ============================== -->
+                <!-- ============================== Tela 1: configuração da tarefa ============================== -->
                 <ScrollViewer IsVisible="{Binding IsSetupScreen}" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel MaxWidth="940" Margin="32,36,32,32" Spacing="24">
                         <StackPanel Spacing="6">
@@ -147,19 +149,29 @@
                                        Text="A análise só lê as pastas. Nada é alterado até você revisar e confirmar o plano." />
                         </StackPanel>
 
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Text="Nome da tarefa" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" Text="{Binding ProfileName}" MaxWidth="420" HorizontalAlignment="Left" MinWidth="280"
+                                     PlaceholderText="Ex.: Fotos de campo 2026" AutomationProperties.Name="Nome da tarefa" />
+                        </Grid>
+
                         <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="14">
                             <Border Classes="card" Padding="18,16" MinHeight="150">
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Top" Text="1 · ORIGEM" Classes="eyebrow accent" Margin="0,0,0,10" />
-                                    <Button DockPanel.Dock="Bottom" Classes="secondary" HorizontalAlignment="Left" Margin="0,12,0,0"
-                                            Command="{Binding BrowseSourceCommand}">
-                                        <StackPanel Orientation="Horizontal" Spacing="7">
-                                            <PathIcon Data="{StaticResource IconFolderOpen}" Classes="small" />
-                                            <TextBlock Text="Escolher pasta…" />
-                                        </StackPanel>
-                                    </Button>
+                                    <WrapPanel DockPanel.Dock="Bottom" ItemSpacing="8" LineSpacing="8" Margin="0,12,0,0">
+                                        <Button Classes="secondary" Command="{Binding BrowseSourceCommand}">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <PathIcon Data="{StaticResource IconFolderOpen}" Classes="small" />
+                                                <TextBlock Text="Escolher pasta…" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Classes="ghost" Command="{Binding OpenSideFolderCommand}" CommandParameter="source"
+                                                Content="{Binding OpenInFileManagerText}" />
+                                    </WrapPanel>
                                     <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
                                              PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
+                                             ToolTip.Tip="{Binding SourcePath}"
                                              AutomationProperties.Name="Diretório de origem" />
                                 </DockPanel>
                             </Border>
@@ -167,19 +179,34 @@
                             <Border Grid.Column="2" Classes="card" Padding="18,16" MinHeight="150">
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Top" Text="2 · DESTINO (LOCAL OU NAS)" Classes="eyebrow" Margin="0,0,0,10" />
-                                    <Button DockPanel.Dock="Bottom" Classes="secondary" HorizontalAlignment="Left" Margin="0,12,0,0"
-                                            Command="{Binding BrowseDestinationCommand}">
-                                        <StackPanel Orientation="Horizontal" Spacing="7">
-                                            <PathIcon Data="{StaticResource IconFolderOpen}" Classes="small" />
-                                            <TextBlock Text="Escolher pasta…" />
-                                        </StackPanel>
-                                    </Button>
-                                    <TextBox Classes="mono" Text="{Binding DestinationPath}" VerticalAlignment="Top"
-                                             PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
-                                             AutomationProperties.Name="Diretório de destino" />
+                                    <WrapPanel DockPanel.Dock="Bottom" ItemSpacing="8" LineSpacing="8" Margin="0,12,0,0">
+                                        <Button Classes="secondary" Command="{Binding BrowseDestinationCommand}">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <PathIcon Data="{StaticResource IconFolderOpen}" Classes="small" />
+                                                <TextBlock Text="Escolher pasta…" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Classes="ghost" Command="{Binding OpenSideFolderCommand}" CommandParameter="destination"
+                                                Content="{Binding OpenInFileManagerText}" />
+                                    </WrapPanel>
+                                    <StackPanel Spacing="6" VerticalAlignment="Top">
+                                        <TextBox Classes="mono" Text="{Binding DestinationPath}"
+                                                 PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
+                                                 ToolTip.Tip="{Binding DestinationPath}"
+                                                 AutomationProperties.Name="Diretório de destino" />
+                                        <TextBlock Classes="caption mono" Text="{Binding EffectiveDestinationHint}" TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasEffectiveDestinationHint}" />
+                                    </StackPanel>
                                 </DockPanel>
                             </Border>
                         </Grid>
+
+                        <Border Classes="danger-banner" IsVisible="{Binding HasPairProblem}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                <TextBlock Grid.Column="1" Text="{Binding PairProblem}" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
 
                         <Border Classes="card" Padding="20,16">
                             <StackPanel Spacing="14">
@@ -216,7 +243,7 @@
                             </StackPanel>
                         </Border>
 
-                        <StackPanel Orientation="Horizontal" Spacing="16">
+                        <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12">
                             <Button Classes="accent primary large" Command="{Binding ScanCommand}" IsVisible="{Binding !IsScanning}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <PathIcon Data="{StaticResource IconSearch}" Classes="small" />
@@ -224,9 +251,13 @@
                                     <TextBlock Text="F5" FontWeight="Normal" Opacity="0.8" />
                                 </StackPanel>
                             </Button>
-                            <TextBlock Text="{Binding ScanHint}" Classes="subtle" VerticalAlignment="Center" IsVisible="{Binding !IsScanning}" />
+                            <Button Grid.Column="1" Classes="secondary large" Command="{Binding ReturnToPlanCommand}"
+                                    IsVisible="{Binding CanReturnToPlan}" Content="Voltar ao plano"
+                                    ToolTip.Tip="Retomar o plano como estava, com as decisões já tomadas" />
+                            <TextBlock Grid.Column="2" Text="{Binding ScanHint}" Classes="subtle" VerticalAlignment="Center"
+                                       TextWrapping="Wrap" IsVisible="{Binding !IsScanning}" />
 
-                            <Border Classes="card" Padding="14,10" IsVisible="{Binding IsScanning}" MinWidth="460">
+                            <Border Grid.ColumnSpan="3" Classes="card" Padding="14,10" IsVisible="{Binding IsScanning}" MinWidth="460" HorizontalAlignment="Left">
                                 <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="14" RowSpacing="8">
                                     <TextBlock Text="Analisando origem e destino…" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <Button Grid.Column="1" Grid.RowSpan="2" Classes="secondary danger-text" Command="{Binding CancelCommand}"
@@ -234,7 +265,7 @@
                                     <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="6" CornerRadius="3" />
                                 </Grid>
                             </Border>
-                        </StackPanel>
+                        </Grid>
 
                         <Border Classes="warning-banner" IsVisible="{Binding HasScanWarnings}">
                             <ItemsControl ItemsSource="{Binding ScanWarnings}">
@@ -276,16 +307,24 @@
                     <Grid Grid.Row="0" Margin="20,16,20,0" ColumnDefinitions="*,Auto,*,Auto" ColumnSpacing="12">
                         <Border Classes="card" Padding="14,10">
                             <StackPanel Spacing="3">
-                                <TextBlock Text="ORIGEM" Classes="eyebrow" />
-                                <TextBlock Text="{Binding SourcePath}" Classes="mono" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SourcePath}" />
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="ORIGEM" Classes="eyebrow" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Classes="link" Command="{Binding OpenSideFolderCommand}" CommandParameter="source"
+                                            Content="{Binding OpenInFileManagerText}" Padding="0" FontSize="12" />
+                                </Grid>
+                                <TextBlock Text="{Binding SourcePath}" Classes="mono" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding SourcePath}" />
                                 <TextBlock Text="{Binding SourceStatsText}" Classes="caption" />
                             </StackPanel>
                         </Border>
                         <PathIcon Grid.Column="1" Data="{StaticResource IconArrowRight}" Width="22" Height="22" Classes="accent-text" />
                         <Border Grid.Column="2" Classes="card" Padding="14,10">
                             <StackPanel Spacing="3">
-                                <TextBlock Text="DESTINO" Classes="eyebrow" />
-                                <TextBlock Text="{Binding DestinationPath}" Classes="mono" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DestinationPath}" />
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="DESTINO" Classes="eyebrow" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Classes="link" Command="{Binding OpenSideFolderCommand}" CommandParameter="destination"
+                                            Content="{Binding OpenInFileManagerText}" Padding="0" FontSize="12" />
+                                </Grid>
+                                <TextBlock Text="{Binding EffectiveDestinationPath}" Classes="mono" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding EffectiveDestinationPath}" />
                                 <TextBlock Text="{Binding DestinationStatsText}" Classes="caption" />
                             </StackPanel>
                         </Border>
@@ -356,9 +395,18 @@
 
                             <WrapPanel ItemSpacing="8" LineSpacing="8">
                                 <Button Classes="category"
+                                        Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.Changes}}"
+                                        Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.Changes}"
+                                        ToolTip.Tip="Mostrar todas as alterações (novos, conflitos e lixo/)">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <TextBlock Classes="count" Text="{Binding ChangeCount, StringFormat='{}{0:N0}'}" />
+                                        <TextBlock Classes="subtle" Text="todas" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="category"
                                         Classes.active="{Binding ActiveFilter, Converter={x:Static views:EqualsConverter.Instance}, ConverterParameter={x:Static vm:ItemFilter.New}}"
                                         Command="{Binding SetFilterCommand}" CommandParameter="{x:Static vm:ItemFilter.New}"
-                                        ToolTip.Tip="Mostrar só os novos (clique de novo para voltar)">
+                                        ToolTip.Tip="Mostrar só os novos">
                                     <StackPanel Orientation="Horizontal" Spacing="9">
                                         <Border Classes="swatch new" />
                                         <TextBlock Classes="count" Text="{Binding NewCount, StringFormat='{}{0:N0}'}" />
@@ -446,7 +494,7 @@
 
                             <Border Grid.Column="1" Width="1" Background="{DynamicResource OsCardBorderBrush}" IsVisible="{Binding #FolderPane.IsVisible}" />
 
-                            <Grid Grid.Column="2" RowDefinitions="Auto,*">
+                            <Grid Grid.Column="2" RowDefinitions="Auto,Auto,*">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="12,10">
                                     <TextBox Text="{Binding SearchText}" PlaceholderText="Buscar no caminho…" AutomationProperties.Name="Buscar no caminho">
                                         <TextBox.InnerLeftContent>
@@ -466,8 +514,16 @@
                                     </DropDownButton>
                                 </Grid>
 
-                                <Panel Grid.Row="1">
-                                    <DataGrid ItemsSource="{Binding FilteredItems}" SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                                <Border Grid.Row="1" Classes="inset" Margin="12,0,12,8" Padding="10,4" IsVisible="{Binding HasListRefinement}">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBlock Text="{Binding ListRefinementText}" Classes="subtle" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding ListRefinementText}" />
+                                        <Button Grid.Column="1" Classes="link" Content="Mostrar todas" Command="{Binding ClearListRefinementCommand}" Padding="0" />
+                                    </Grid>
+                                </Border>
+
+                                <Panel Grid.Row="2">
+                                    <DataGrid x:Name="ItemsGrid" ItemsSource="{Binding FilteredItems}" SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                                               AutoGenerateColumns="False" IsReadOnly="True"
                                               CanUserResizeColumns="True" CanUserSortColumns="True"
                                               GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource OsDividerBrush}"
@@ -518,10 +574,13 @@
                                                 <PathIcon Data="{StaticResource IconClose}" Classes="small" />
                                             </Button>
                                         </Grid>
-                                        <StackPanel Spacing="3">
-                                            <TextBlock Text="{Binding FileName}" Classes="mono" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding FolderDisplay}" Classes="caption" TextWrapping="Wrap" />
-                                        </StackPanel>
+                                        <Border Classes="inset" Padding="10,8">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Classes="eyebrow" Text="ARQUIVO SELECIONADO" />
+                                                <TextBlock Text="{Binding FileName}" Classes="mono" FontSize="15" FontWeight="Bold" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding FolderDisplay}" Classes="caption" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
 
                                         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                             <Border Classes="side-card" Classes.newer="{Binding IsSourceNewer}" IsVisible="{Binding HasSource}">
@@ -541,6 +600,8 @@
                                         </Grid>
 
                                         <TextBlock Text="{Binding PlanDescription}" TextWrapping="Wrap" />
+                                        <TextBlock Classes="warning" FontWeight="SemiBold" TextWrapping="Wrap" IsVisible="{Binding IsDestinationNewer}"
+                                                   Text="Atenção: a versão do destino é a mais recente. Substituir troca por uma versão mais antiga." />
 
                                         <StackPanel Spacing="6" IsVisible="{Binding CanDecide}">
                                             <Border Classes="option-card" Classes.checked="{Binding IsResolutionReplace}">
@@ -634,6 +695,15 @@
                                 </Button>
                             </Grid>
                             <ProgressBar Value="{Binding OverallProgress}" Minimum="0" Maximum="100" Height="10" CornerRadius="5" />
+                            <Border Classes="warning-banner" IsVisible="{Binding IsWaitingForDecision}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <PathIcon Data="{StaticResource IconConflict}" Classes="small conflict" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" TextWrapping="Wrap">
+                                        <Run Text="Aguardando sua decisão:" FontWeight="SemiBold" />
+                                        <Run Text="{Binding WaitingDecisionFile}" />
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
                             <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
                                 <Border Classes="inset" Padding="12,10">
                                     <StackPanel Spacing="5">
@@ -720,6 +790,13 @@
                                     <Button Grid.Column="2" Classes="secondary" Command="{Binding BackToPlanCommand}" VerticalAlignment="Center" Content="Ver arquivos" />
                                     <Button Grid.Column="3" Classes="accent primary" Command="{Binding StartSyncCommand}" VerticalAlignment="Center"
                                             IsVisible="{Binding ResultHasProblems}" Content="{Binding RetryText}" />
+                                    <Button Grid.Column="3" Classes="accent primary" Command="{Binding ScanCommand}" VerticalAlignment="Center"
+                                            IsVisible="{Binding ResultIsClean}" ToolTip.Tip="Confere se origem e destino ficaram iguais">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="Analisar novamente" />
+                                            <TextBlock Text="F5" FontWeight="Normal" Opacity="0.8" />
+                                        </StackPanel>
+                                    </Button>
                                 </Grid>
                                 <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="12">
                                     <Border Classes="inset" Padding="14,12">
@@ -784,7 +861,7 @@
                             <Button Grid.Column="1" Classes="tile" Command="{Binding OpenOldFolderCommand}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Abrir old/" FontWeight="SemiBold" />
-                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Versões substituídas, com data e hora no nome." />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Versões substituídas. Data e hora entram no nome só se ele já existir em old/." />
                                 </StackPanel>
                             </Button>
                             <Button Grid.Column="2" Classes="tile" Command="{Binding ExportReportCommand}">

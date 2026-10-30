@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -24,6 +25,15 @@ public partial class ConfirmSyncViewModel : ViewModelBase
     private bool _massOrphanAcknowledged;
 
     /// <summary>
+    /// Marcação "confirmo substituir versões mais novas do destino", exigida quando
+    /// <see cref="SyncPlanSummary.HasDestinationNewerReplacements"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirm))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private bool _destinationNewerAcknowledged;
+
+    /// <summary>
     /// Resultado: <c>true</c> se o usuário confirmou.
     /// </summary>
     public bool Result { get; private set; }
@@ -36,13 +46,40 @@ public partial class ConfirmSyncViewModel : ViewModelBase
     /// <summary>
     /// Indica se o botão Sincronizar está habilitado.
     /// </summary>
-    public bool CanConfirm => !Summary.IsMassOrphan || MassOrphanAcknowledged;
+    public bool CanConfirm =>
+        (!Summary.IsMassOrphan || MassOrphanAcknowledged) &&
+        (!Summary.HasDestinationNewerReplacements || DestinationNewerAcknowledged);
+
+    /// <summary>
+    /// Lista dos arquivos em que uma versão mais nova do destino será substituída (até 8, mais o restante em número).
+    /// </summary>
+    public string DestinationNewerListText
+    {
+        get
+        {
+            const int max = 8;
+            var list = Summary.DestinationNewerReplacements;
+            var lines = list.Take(max).Select(p => "• " + p).ToList();
+            if (list.Count > max)
+            {
+                lines.Add($"… e mais {list.Count - max}");
+            }
+            return string.Join(Environment.NewLine, lines);
+        }
+    }
+
+    /// <summary>
+    /// Texto da caixa de confirmação das substituições de versões mais novas.
+    /// </summary>
+    public string DestinationNewerText => Summary.DestinationNewerReplacements.Count == 1
+        ? "Confirmo substituir este arquivo, embora a versão do destino seja mais nova. A versão atual vai para old/."
+        : $"Confirmo substituir estes {Summary.DestinationNewerReplacements.Count} arquivos, embora as versões do destino sejam mais novas. As versões atuais vão para old/.";
 
     /// <summary>
     /// Texto da caixa de confirmação de remoção em massa.
     /// </summary>
     public string MassOrphanText =>
-        $"Entendo que {Summary.OrphanCount} arquivo(s) ({Summary.OrphanPercent:n0}% do destino) serão movidos para lixo/.";
+        $"Entendo que {Summary.OrphanCount:N0} {(Summary.OrphanCount == 1 ? "arquivo" : "arquivos")} ({Summary.OrphanPercent:n0}% do destino) {(Summary.OrphanCount == 1 ? "será movido" : "serão movidos")} para lixo/.";
 
     /// <summary>
     /// Origem e destino em uma linha.

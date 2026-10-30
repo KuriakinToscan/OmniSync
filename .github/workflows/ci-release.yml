@@ -34,11 +34,31 @@ jobs:
 
       - name: Publicar executável Windows (win-x64)
         if: matrix.os == 'windows-latest'
-        run: dotnet publish OmniSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/win-x64
+        run: dotnet publish OmniSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish/win-x64
+
+      - name: Autoteste do executável Windows publicado (sozinho, fora da pasta de build)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          Copy-Item publish/win-x64/OmniSync.exe smoke/
+          $p = Start-Process -FilePath smoke/OmniSync.exe -ArgumentList '--self-test' -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'Autoteste excedeu 120 s' }
+          $log = Join-Path $env:LOCALAPPDATA 'OmniSync/selftest.log'
+          Get-Content $log
+          if (-not (Select-String -Path $log -Pattern 'SELF_TEST_OK' -Quiet)) { throw 'Autoteste falhou' }
 
       - name: Publicar executável Linux (linux-x64)
         if: matrix.os == 'ubuntu-latest'
-        run: dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o publish/linux-x64
+        run: dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish/linux-x64
+
+      - name: Autoteste do executável Linux publicado (sozinho, fora da pasta de build)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p smoke && cp publish/linux-x64/OmniSync smoke/
+          timeout 120 xvfb-run -a smoke/OmniSync --self-test
+          grep SELF_TEST ~/.local/share/OmniSync/selftest.log
+          grep -q SELF_TEST_OK ~/.local/share/OmniSync/selftest.log
 
       - name: Upload de artefato Windows
         if: matrix.os == 'windows-latest'

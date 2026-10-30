@@ -103,6 +103,15 @@ public sealed class SyncPlanSummary
     /// <summary>Conflitos marcados para substituir.</summary>
     public int ReplaceCount { get; init; }
 
+    /// <summary>
+    /// Conflitos marcados para substituir em que a versão do destino é a mais recente (caminhos relativos).
+    /// A substituição troca uma versão mais nova por uma mais antiga, por isso exige confirmação própria.
+    /// </summary>
+    public IReadOnlyList<string> DestinationNewerReplacements { get; init; } = Array.Empty<string>();
+
+    /// <summary>Indica se há substituições de versões mais novas do destino.</summary>
+    public bool HasDestinationNewerReplacements => DestinationNewerReplacements.Count > 0;
+
     /// <summary>Conflitos marcados para ignorar.</summary>
     public int IgnoreCount { get; init; }
 

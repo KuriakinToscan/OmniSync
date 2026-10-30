@@ -10,10 +10,27 @@
         Background="{DynamicResource OsCardBrush}"
         CanResize="False">
 
-    <StackPanel>
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource OsPanelBrush}" BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="0,1,0,0" Padding="24,14">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="Nenhum arquivo é excluído." Classes="subtle" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Content="Voltar ao plano" Command="{Binding CancelCommand}" IsCancel="True" MinHeight="40" />
+                <Button Grid.Column="2" Classes="accent primary" Content="Sincronizar agora" Command="{Binding ConfirmCommand}" />
+            </Grid>
+        </Border>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel>
         <StackPanel Margin="24,22,24,6" Spacing="6">
             <TextBlock Text="Revise antes de sincronizar" FontSize="20" FontWeight="Bold" />
-            <TextBlock Classes="mono caption" TextWrapping="Wrap" Text="{Binding RouteText}" />
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="2">
+                <TextBlock Classes="caption" Text="Origem" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Classes="mono caption" Text="{Binding Summary.SourcePath}"
+                           TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding Summary.SourcePath}" />
+                <TextBlock Grid.Row="1" Classes="caption" Text="Destino" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono caption" Text="{Binding Summary.DestinationPath}"
+                           TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding Summary.DestinationPath}" />
+            </Grid>
         </StackPanel>
 
         <StackPanel Margin="24,6,24,14">
@@ -66,6 +83,22 @@
             </StackPanel>
         </Border>
 
+        <Border Classes="danger-banner" Margin="24,0,24,14" IsVisible="{Binding Summary.HasDestinationNewerReplacements}">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                    <TextBlock Grid.Column="1" TextWrapping="Wrap">
+                        <Run Text="Substituição de versões mais novas." FontWeight="Bold" />
+                        <Run Text="Nestes arquivos o destino foi modificado depois da origem; a versão mais antiga da origem vai ocupar o lugar." />
+                    </TextBlock>
+                </Grid>
+                <TextBlock Classes="mono" FontSize="12" TextWrapping="Wrap" Margin="26,0,0,0" Text="{Binding DestinationNewerListText}" />
+                <CheckBox IsChecked="{Binding DestinationNewerAcknowledged}" Margin="26,0,0,0">
+                    <TextBlock Text="{Binding DestinationNewerText}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                </CheckBox>
+            </StackPanel>
+        </Border>
+
         <Border Classes="danger-banner" Margin="24,0,24,16" IsVisible="{Binding Summary.IsMassOrphan}">
             <StackPanel Spacing="8">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
@@ -81,12 +114,8 @@
             </StackPanel>
         </Border>
 
-        <Border Background="{DynamicResource OsPanelBrush}" BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="0,1,0,0" Padding="24,14">
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                <TextBlock Text="Nenhum arquivo é excluído." Classes="subtle" VerticalAlignment="Center" />
-                <Button Grid.Column="1" Classes="secondary" Content="Voltar ao plano" Command="{Binding CancelCommand}" IsCancel="True" MinHeight="40" />
-                <Button Grid.Column="2" Classes="accent primary" Content="Sincronizar agora" Command="{Binding ConfirmCommand}" />
-            </Grid>
-        </Border>
-    </StackPanel>
+
+        </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </Window>

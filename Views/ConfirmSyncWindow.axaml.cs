@@ -15,6 +15,7 @@ public partial class ConfirmSyncWindow : Window
     public ConfirmSyncWindow()
     {
         InitializeComponent();
+        WindowPlacement.KeepOnScreen(this);
     }
 
     /// <summary>
