@@ -44,6 +44,26 @@ public static class TextSearch
 }
 
 /// <summary>
+/// Concordância de número nos textos em português ("1 arquivo copiado", "2 arquivos copiados").
+/// </summary>
+public static class PtText
+{
+    /// <summary>
+    /// Quantidade seguida da forma singular ou plural.
+    /// </summary>
+    /// <param name="count">Quantidade.</param>
+    /// <param name="singular">Forma usada quando a quantidade é 1.</param>
+    /// <param name="plural">Forma usada nos demais casos (inclusive 0).</param>
+    public static string Count(long count, string singular, string plural) =>
+        $"{count:N0} {(count == 1 ? singular : plural)}";
+
+    /// <summary>
+    /// Escolhe a forma conforme a quantidade, sem repetir o número.
+    /// </summary>
+    public static string Pick(long count, string singular, string plural) => count == 1 ? singular : plural;
+}
+
+/// <summary>
 /// Ordenação "natural" de caminhos: trechos numéricos são comparados pelo valor
 /// (<c>IMG_2</c> antes de <c>IMG_10</c>); o restante, sem diferenciar maiúsculas.
 /// </summary>

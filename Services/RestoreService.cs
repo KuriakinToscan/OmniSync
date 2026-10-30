@@ -86,7 +86,7 @@ public sealed partial class RestoreService
             var result = new RestoreResult();
             var touchedDirs = new List<string>();
 
-            logger?.Report($"[RESTAURAÇÃO] Restaurando {selected.Count} arquivo(s) de '{trashRoot}'...");
+            logger?.Report($"[RESTAURAÇÃO] Restaurando {PtText.Count(selected.Count, "arquivo", "arquivos")} de '{trashRoot}'...");
 
             foreach (var entry in selected)
             {

@@ -83,7 +83,7 @@ public class ReportAndErrorTests
         Assert.Equal(ReportExporter.Header, lines[0]);
         Assert.All(lines[0], c => Assert.True(c < 128));
         Assert.StartsWith("\"pasta;com/ponto.txt\";", lines[1]);
-        Assert.Contains(";conflict;Manter destino;keep;", lines[1]);
+        Assert.Contains(";conflito;Manter destino;manter;", lines[1]);
         Assert.Contains(";10;20;", lines[1]);
         Assert.Equal(11, lines[0].Split(';').Length);
     }

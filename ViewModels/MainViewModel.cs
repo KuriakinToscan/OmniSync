@@ -968,7 +968,23 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnActiveFilterChanged(ItemFilter value) => ApplyFilter();
 
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value)
+    {
+        ApplyFilter();
+        OnPropertyChanged(nameof(HasSearchText));
+        ClearSearchCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Indica se há texto na busca (mostra o botão de limpar).
+    /// </summary>
+    public bool HasSearchText => !string.IsNullOrEmpty(SearchText);
+
+    /// <summary>
+    /// Limpa a busca (botão X da caixa de busca ou Esc dentro dela).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasSearchText))]
+    private void ClearSearch() => SearchText = string.Empty;
 
     partial void OnSelectedFolderChanged(FolderNode? value) => ApplyFilter();
 
@@ -1266,7 +1282,7 @@ public partial class MainViewModel : ViewModelBase
             SelectedItem = null;
 
             StatusMessage = $"Análise concluída: {NewCount} novos, {ConflictCount} conflitos, {TrashCount} órfãos p/ lixo/, {IdenticalCount} idênticos" +
-                            (scan.Warnings.Count > 0 ? $" · {scan.Warnings.Count} aviso(s)." : ".");
+                            (scan.Warnings.Count > 0 ? $" · {PtText.Count(scan.Warnings.Count, "aviso", "avisos")}." : ".");
             CurrentOperationText = "Pronto para sincronizar.";
             SelectedProfile?.ShowPlanReady(NewCount + ConflictCount + TrashCount, AskDecisionCount);
         }
@@ -1400,6 +1416,7 @@ public partial class MainViewModel : ViewModelBase
 
             if (AskConflictResolutionAsync != null)
             {
+                CurrentOperationText = item.RelativePath;
                 WaitingDecisionFile = item.RelativePath;
                 IsWaitingForDecision = true;
                 (ConflictResolution choice, bool applyToAll) answer;
@@ -1437,7 +1454,7 @@ public partial class MainViewModel : ViewModelBase
                 _cts!.Token);
 
             StatusMessage = result.HasFailures
-                ? $"Concluída com {result.Failed} falha(s): {result.Summary}."
+                ? $"Concluída com {PtText.Count(result.Failed, "falha", "falhas")}: {result.Summary}."
                 : $"Sincronização concluída sem falhas: {result.Summary}.";
             CurrentOperationText = "Operações finalizadas.";
         }
@@ -1764,7 +1781,7 @@ public partial class MainViewModel : ViewModelBase
             }
 
             IsProgressIndeterminate = true;
-            StatusMessage = $"Restaurando {selected.Count} arquivo(s)...";
+            StatusMessage = $"Restaurando {PtText.Count(selected.Count, "arquivo", "arquivos")}...";
             var result = await _restoreService.RestoreAsync(dest, selected, new InlineProgress<string>(AddLog), _cts.Token);
 
             // Os arquivos do destino mudaram: a análise anterior deixa de valer
@@ -1976,8 +1993,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Escolhe a forma singular ou plural conforme a quantidade ("1 arquivo", "2 arquivos").
     /// </summary>
-    public static string Plural(int count, string singular, string plural) =>
-        $"{count:N0} {(count == 1 ? singular : plural)}";
+    public static string Plural(int count, string singular, string plural) => PtText.Count(count, singular, plural);
 
     /// <summary>
     /// Texto do resultado da restauração de lixo/, com concordância de número.

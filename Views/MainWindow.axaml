@@ -194,8 +194,11 @@
                                                  PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
                                                  ToolTip.Tip="{Binding DestinationPath}"
                                                  AutomationProperties.Name="Diretório de destino" />
-                                        <TextBlock Classes="caption mono" Text="{Binding EffectiveDestinationHint}" TextWrapping="Wrap"
-                                                   IsVisible="{Binding HasEffectiveDestinationHint}" />
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasEffectiveDestinationHint}">
+                                            <TextBlock Classes="caption" Text="Sincroniza em" />
+                                            <TextBlock Grid.Column="1" Classes="caption mono" Text="{Binding EffectiveDestinationPath}"
+                                                       TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding EffectiveDestinationPath}" />
+                                        </Grid>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
@@ -500,6 +503,15 @@
                                         <TextBox.InnerLeftContent>
                                             <PathIcon Data="{StaticResource IconSearch}" Classes="small" Margin="10,0,0,0" Opacity="0.6" />
                                         </TextBox.InnerLeftContent>
+                                        <TextBox.InnerRightContent>
+                                            <Button Classes="icon-only" Command="{Binding ClearSearchCommand}" IsVisible="{Binding HasSearchText}"
+                                                    Margin="0,0,4,0" ToolTip.Tip="Limpar a busca (Esc)" AutomationProperties.Name="Limpar a busca">
+                                                <PathIcon Data="{StaticResource IconClose}" Classes="small" />
+                                            </Button>
+                                        </TextBox.InnerRightContent>
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding Gesture="Escape" Command="{Binding ClearSearchCommand}" />
+                                        </TextBox.KeyBindings>
                                     </TextBox>
                                     <DropDownButton Grid.Column="1" Classes="secondary" IsEnabled="{Binding CanEditConflicts}"
                                                     ToolTip.Tip="Definir a decisão de todos os conflitos pendentes">
