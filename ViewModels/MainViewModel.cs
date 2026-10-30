@@ -1125,8 +1125,8 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Erro ao selecionar pasta de origem: {ex.Message}";
-            AddLog($"[ERRO] {ex.Message}");
+            StatusMessage = $"Erro ao selecionar pasta de origem: {ErrorMessages.Translate(ex)}";
+            AddLog($"[ERRO] {ErrorMessages.ForLog(ex)}");
         }
     }
 
@@ -1149,8 +1149,8 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Erro ao selecionar pasta de destino: {ex.Message}";
-            AddLog($"[ERRO] {ex.Message}");
+            StatusMessage = $"Erro ao selecionar pasta de destino: {ErrorMessages.Translate(ex)}";
+            AddLog($"[ERRO] {ErrorMessages.ForLog(ex)}");
         }
     }
 
@@ -1277,8 +1277,8 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Erro durante a análise: {ex.Message}";
-            AddLog($"[ERRO] {ex.Message}");
+            StatusMessage = $"Erro durante a análise: {ErrorMessages.Translate(ex)}";
+            AddLog($"[ERRO] {ErrorMessages.ForLog(ex)}");
         }
         finally
         {
@@ -1449,8 +1449,8 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Erro durante a sincronização: {ex.Message}";
-            AddLog($"[ERRO CRÍTICO] {ex.Message}");
+            StatusMessage = $"Erro durante a sincronização: {ErrorMessages.Translate(ex)}";
+            AddLog($"[ERRO CRÍTICO] {ErrorMessages.ForLog(ex)}");
         }
         finally
         {
@@ -1783,8 +1783,8 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Erro ao restaurar lixo/: {ex.Message}";
-            AddLog($"[ERRO] {ex.Message}");
+            StatusMessage = $"Erro ao restaurar lixo/: {ErrorMessages.Translate(ex)}";
+            AddLog($"[ERRO] {ErrorMessages.ForLog(ex)}");
         }
         finally
         {
@@ -1813,8 +1813,8 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Erro ao exportar relatório: {ex.Message}";
-            AddLog($"[ERRO] Exportação de relatório: {ex.Message}");
+            StatusMessage = $"Erro ao exportar relatório: {ErrorMessages.Translate(ex)}";
+            AddLog($"[ERRO] Exportação de relatório: {ErrorMessages.ForLog(ex)}");
         }
     }
 
@@ -1939,7 +1939,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            AddLog($"[ERRO] Não foi possível abrir a pasta: {ex.Message}");
+            AddLog($"[ERRO] Não foi possível abrir a pasta: {ErrorMessages.ForLog(ex)}");
         }
     }
 
@@ -1960,7 +1960,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            AddLog($"[ERRO] Não foi possível abrir a pasta: {ex.Message}");
+            AddLog($"[ERRO] Não foi possível abrir a pasta: {ErrorMessages.ForLog(ex)}");
         }
     }
 

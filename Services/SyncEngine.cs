@@ -244,7 +244,7 @@ public class SyncEngine : ISyncEngine
                         catch (Exception ex)
                         {
                             identical[index] = false;
-                            logger?.Report($"Aviso ao calcular hash de '{job.RelPath}': {ex.Message}");
+                            logger?.Report($"Aviso ao calcular hash de '{job.RelPath}': {ErrorMessages.ForLog(ex)}");
                         }
 
                         var completed = Interlocked.Increment(ref done);
@@ -358,8 +358,8 @@ public class SyncEngine : ISyncEngine
             void Fail(SyncItem item, string prefix, Exception ex)
             {
                 result.FailedItems.Add(item);
-                Update(item, $"{prefix}: {ex.Message}", processed: false, error: true);
-                logger?.Report($"[ERRO] {prefix} '{item.RelativePath}': {ex.Message}");
+                Update(item, $"{prefix}: {ErrorMessages.Translate(ex)}", processed: false, error: true);
+                logger?.Report($"[ERRO] {prefix} '{item.RelativePath}': {ErrorMessages.ForLog(ex)}");
             }
 
             void OnBytesCopied(long delta)
@@ -607,7 +607,7 @@ public class SyncEngine : ISyncEngine
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
             {
                 result.UnreadableDirectories.Add(Path.GetRelativePath(rootDir, currentDir));
-                logger?.Report($"Aviso: pasta ilegível ignorada no {label} '{currentDir}': {ex.Message}");
+                logger?.Report($"Aviso: pasta ilegível ignorada no {label} '{currentDir}': {ErrorMessages.ForLog(ex)}");
                 continue;
             }
 

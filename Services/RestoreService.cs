@@ -131,7 +131,7 @@ public sealed partial class RestoreService
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     result.Failed++;
-                    logger?.Report($"[ERRO] Não foi possível restaurar '{entry.RelativePath}': {ex.Message}");
+                    logger?.Report($"[ERRO] Não foi possível restaurar '{entry.RelativePath}': {ErrorMessages.ForLog(ex)}");
                 }
             }
 
