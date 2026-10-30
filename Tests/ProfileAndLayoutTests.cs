@@ -142,8 +142,8 @@ public class ProfileAndLayoutTests : IDisposable
     [Theory]
     [InlineData("/home/u/Levantamentos", "Levantamentos")]
     [InlineData("/home/u/Levantamentos/", "Levantamentos")]
-    [InlineData("", "Novo par")]
-    [InlineData(null, "Novo par")]
+    [InlineData("", "Nova tarefa")]
+    [InlineData(null, "Nova tarefa")]
     public void SuggestName_ShouldUseLastFolder(string? source, string expected)
     {
         Assert.Equal(expected, SyncProfile.SuggestName(source));

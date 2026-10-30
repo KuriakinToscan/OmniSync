@@ -16,6 +16,7 @@ public partial class ConflictDialogWindow : Window
     public ConflictDialogWindow()
     {
         InitializeComponent();
+        WindowPlacement.KeepOnScreen(this);
     }
 
     /// <summary>

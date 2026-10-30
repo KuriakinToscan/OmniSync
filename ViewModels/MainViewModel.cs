@@ -252,6 +252,18 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _progressPercentText = "0%";
 
+    /// <summary>
+    /// Indica que a execução está parada aguardando a decisão de um conflito.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isWaitingForDecision;
+
+    /// <summary>
+    /// Arquivo cujo conflito aguarda decisão.
+    /// </summary>
+    [ObservableProperty]
+    private string _waitingDecisionFile = string.Empty;
+
     /// <summary>Progresso da fase de cópia (ex.: <c>630 de 1.248</c>).</summary>
     [ObservableProperty]
     private string _copyPhaseText = "—";
@@ -346,7 +358,7 @@ public partial class MainViewModel : ViewModelBase
     private ItemFilter _activeFilter = ItemFilter.Changes;
 
     /// <summary>
-    /// Texto de busca aplicado ao caminho relativo (sem diferenciar maiúsculas).
+    /// Texto de busca aplicado ao caminho relativo (sem diferenciar maiúsculas nem acentos).
     /// </summary>
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -444,6 +456,48 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>Indica se há arquivo selecionado (painel de detalhes visível).</summary>
     public bool HasSelectedItem => SelectedItem != null;
+
+    /// <summary>Total de alterações planejadas (chip "Todas").</summary>
+    public int ChangeCount => NewCount + ConflictCount + TrashCount;
+
+    /// <summary>
+    /// Indica se a lista está restrita por categoria, pasta ou busca (diferente da visão "Todas").
+    /// </summary>
+    public bool HasListRefinement =>
+        ActiveFilter != ItemFilter.Changes ||
+        !string.IsNullOrWhiteSpace(SearchText) ||
+        (SelectedFolder != null && SelectedFolder.RelativePath.Length > 0);
+
+    /// <summary>
+    /// Descrição do que restringe a lista (ex.: <c>Mostrando: conflitos · pasta Fotos · busca "img"</c>).
+    /// </summary>
+    public string ListRefinementText
+    {
+        get
+        {
+            var parts = new List<string>();
+            var category = ActiveFilter switch
+            {
+                ItemFilter.New => "novos",
+                ItemFilter.Conflicts => "conflitos",
+                ItemFilter.Orphans => "para lixo/",
+                ItemFilter.Identical => "idênticos",
+                ItemFilter.Errors => "erros",
+                ItemFilter.All => "tudo",
+                _ => "todas as alterações"
+            };
+            parts.Add(category);
+            if (SelectedFolder != null && SelectedFolder.RelativePath.Length > 0)
+            {
+                parts.Add($"pasta {SelectedFolder.RelativePath}");
+            }
+            if (!string.IsNullOrWhiteSpace(SearchText))
+            {
+                parts.Add($"busca \"{SearchText.Trim()}\"");
+            }
+            return $"Mostrando {FilteredItems.Count:N0}: " + string.Join(" · ", parts);
+        }
+    }
 
     /// <summary>
     /// Indica se a mensagem de estado vazio deve ser exibida sobre a grade.
@@ -669,7 +723,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     private static ProfileItemViewModel CreateProfileItem() =>
-        new(new SyncProfile { Name = "Novo par", ExcludePatterns = SettingsService.DefaultExcludePatterns });
+        new(new SyncProfile { Name = SyncProfile.DefaultName, ExcludePatterns = SettingsService.DefaultExcludePatterns });
 
     /// <summary>
     /// Copia a configuração atual da tela para o par ativo.
@@ -753,9 +807,9 @@ public partial class MainViewModel : ViewModelBase
 
         if (ConfirmAsync != null &&
             !await ConfirmAsync(
-                "Remover par",
-                $"Remover o par \"{item.Name}\" da lista? Só a configuração salva é apagada; nenhum arquivo da origem ou do destino é alterado.",
-                "Remover"))
+                "Excluir tarefa",
+                $"Excluir a tarefa \"{item.Name}\"? Só a configuração salva é apagada; nenhum arquivo da origem ou do destino é alterado.",
+                "Excluir"))
         {
             return;
         }
@@ -833,9 +887,9 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSourcePathChanged(string? oldValue, string newValue)
     {
-        // Nome automático enquanto o usuário não renomear o par
+        // Nome automático enquanto o usuário não renomear a tarefa
         if (!_suppressInvalidation && SelectedProfile != null &&
-            (ProfileName == "Novo par" || ProfileName == SyncProfile.SuggestName(oldValue)))
+            (SyncProfile.IsDefaultName(ProfileName) || ProfileName == SyncProfile.SuggestName(oldValue)))
         {
             ProfileName = SyncProfile.SuggestName(newValue);
         }
@@ -924,6 +978,8 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnFilteredItemsChanged(IReadOnlyList<SyncItem> value)
     {
+        OnPropertyChanged(nameof(HasListRefinement));
+        OnPropertyChanged(nameof(ListRefinementText));
         OnPropertyChanged(nameof(IsEmptyStateVisible));
         OnPropertyChanged(nameof(EmptyStateText));
     }
@@ -1182,6 +1238,7 @@ public partial class MainViewModel : ViewModelBase
                 _cts!.Token);
 
             Items.AddRange(scan.Items);
+            Items.Sort((a, b) => NaturalStringComparer.Instance.Compare(a.RelativePath, b.RelativePath));
             _planPairKey = DecisionMemory.PairKey(SourcePath, effectiveDest);
             int restored = _decisionMemory.Apply(_planPairKey, Items);
             if (restored > 0)
@@ -1314,10 +1371,13 @@ public partial class MainViewModel : ViewModelBase
         SelectedProfile?.ShowRunning(0);
         ResetCts();
 
+        var runStopwatch = Stopwatch.StartNew();
         var progress = new Progress<SyncProgressReport>(report =>
         {
-            OverallProgress = report.OverallProgressPercent;
-            ProgressPercentText = $"{report.OverallProgressPercent:0}%";
+            // 100% só quando todos os arquivos terminaram (um conflito aguardando decisão não pode aparecer como concluído)
+            double percent = CapPercent(report.OverallProgressPercent, report.ProcessedFiles, report.TotalFiles);
+            OverallProgress = percent;
+            ProgressPercentText = $"{percent:0}%";
             SpeedFormatted = report.SpeedFormatted;
             EtaFormatted = report.EtaFormatted;
             ProcessedFilesText = $"{report.ProcessedFiles:N0} de {report.TotalFiles:N0} arquivos";
@@ -1325,7 +1385,7 @@ public partial class MainViewModel : ViewModelBase
             CurrentOperationText = !string.IsNullOrEmpty(report.CurrentFileName)
                 ? report.CurrentFileName
                 : "Finalizando...";
-            SelectedProfile?.ShowRunning(report.OverallProgressPercent);
+            SelectedProfile?.ShowRunning(percent);
         });
 
         ConflictResolution? rememberedChoice = null;
@@ -1340,7 +1400,19 @@ public partial class MainViewModel : ViewModelBase
 
             if (AskConflictResolutionAsync != null)
             {
-                var (choice, applyToAll) = await AskConflictResolutionAsync(item);
+                WaitingDecisionFile = item.RelativePath;
+                IsWaitingForDecision = true;
+                (ConflictResolution choice, bool applyToAll) answer;
+                try
+                {
+                    answer = await AskConflictResolutionAsync(item);
+                }
+                finally
+                {
+                    IsWaitingForDecision = false;
+                    WaitingDecisionFile = string.Empty;
+                }
+                var (choice, applyToAll) = answer;
                 if (applyToAll)
                 {
                     rememberedChoice = choice;
@@ -1390,7 +1462,12 @@ public partial class MainViewModel : ViewModelBase
         }
 
         // Balanço exibido mesmo quando a execução foi interrompida: monta-se a partir do estado dos itens
-        result ??= BuildResultFromItems(pending);
+        runStopwatch.Stop();
+        if (result == null)
+        {
+            result = BuildResultFromItems(pending);
+            result.Duration = runStopwatch.Elapsed;
+        }
         LastRunCancelled = cancelled;
         LastResult = result;
         RecordRunOnProfile(result, cancelled);
@@ -1493,7 +1570,18 @@ public partial class MainViewModel : ViewModelBase
     private void SetShowOnlyProblems(bool onlyProblems) => ShowOnlyProblems = onlyProblems;
 
     /// <summary>
-    /// Alterna o filtro de categoria: clicar de novo no filtro ativo volta para "Alterações".
+    /// Volta à visão "Todas": sem filtro de categoria, na pasta raiz e sem busca.
+    /// </summary>
+    [RelayCommand]
+    private void ClearListRefinement()
+    {
+        SearchText = string.Empty;
+        SelectedFolder = FolderRoots.FirstOrDefault();
+        ActiveFilter = ItemFilter.Changes;
+    }
+
+    /// <summary>
+    /// Alterna o filtro de categoria: clicar de novo no filtro ativo volta para "Todas".
     /// </summary>
     /// <param name="filter">Filtro a aplicar.</param>
     [RelayCommand]
@@ -1524,10 +1612,10 @@ public partial class MainViewModel : ViewModelBase
             source = source.Where(folder.Contains);
         }
 
-        var search = SearchText?.Trim();
-        if (!string.IsNullOrEmpty(search))
+        var search = TextSearch.Fold(SearchText?.Trim());
+        if (search.Length > 0)
         {
-            source = source.Where(i => i.RelativePath.Contains(search, StringComparison.OrdinalIgnoreCase));
+            source = source.Where(i => TextSearch.ContainsFolded(i.RelativePath, search));
         }
 
         var list = source.ToList();
@@ -1556,7 +1644,8 @@ public partial class MainViewModel : ViewModelBase
         var newBytes = Items.Where(i => i.IsNew).Sum(i => i.SourceSize);
         NewBytesFormatted = SyncItem.FormatBytes(newBytes);
 
-        int changes = NewCount + ConflictCount + TrashCount;
+        int changes = ChangeCount;
+        OnPropertyChanged(nameof(ChangeCount));
         long transfer = newBytes + Items.Where(i => i.IsConflict).Sum(i => i.SourceSize);
         PlanHeadline = changes == 0
             ? "Nada a sincronizar"
@@ -1681,8 +1770,12 @@ public partial class MainViewModel : ViewModelBase
             // Os arquivos do destino mudaram: a análise anterior deixa de valer
             ClearPlan();
             IsShowingResult = false;
-            StatusMessage = $"Restauração concluída: {result.Restored} restaurados, {result.KeptInTrash} mantidos em lixo/ (já existiam no destino), {result.Failed} falhas. Analise novamente.";
+            StatusMessage = DescribeRestoreResult(result.Restored, result.KeptInTrash, result.Failed);
             CurrentOperationText = "Restauração concluída.";
+            if (NotifyAsync != null)
+            {
+                await NotifyAsync("Restauração concluída", StatusMessage);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1745,6 +1838,51 @@ public partial class MainViewModel : ViewModelBase
     {
         Directory.CreateDirectory(AppPaths.LogsDirectory);
         OpenInFileManager(AppPaths.LogsDirectory);
+    }
+
+    /// <summary>
+    /// Nome do gerenciador de arquivos do sistema, para os rótulos dos botões.
+    /// </summary>
+    public static string FileManagerName => OperatingSystem.IsWindows() ? "Explorer" : OperatingSystem.IsMacOS() ? "Finder" : "gerenciador de arquivos";
+
+    /// <summary>Rótulo dos botões que abrem origem e destino no gerenciador de arquivos.</summary>
+    public string OpenInFileManagerText => $"Abrir no {FileManagerName}";
+
+    /// <summary>
+    /// Abre a pasta de origem ou de destino no gerenciador de arquivos. Para o destino, abre o destino efetivo;
+    /// se ele ainda não existe (primeira sincronização), abre a pasta escolhida e avisa.
+    /// </summary>
+    /// <param name="side"><c>source</c> para a origem; qualquer outro valor para o destino.</param>
+    [RelayCommand]
+    private async Task OpenSideFolderAsync(string? side)
+    {
+        bool isSource = side == "source";
+        var path = (isSource ? SourcePath : EffectiveDestinationPath).Trim();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            StatusMessage = isSource ? "Escolha a origem primeiro." : "Escolha o destino primeiro.";
+            return;
+        }
+        if (Directory.Exists(path))
+        {
+            OpenInFileManager(path);
+            return;
+        }
+
+        var chosen = DestinationPath.Trim();
+        if (!isSource && Directory.Exists(chosen))
+        {
+            // Primeira sincronização: a subpasta com o nome da origem ainda não foi criada
+            OpenInFileManager(chosen);
+            StatusMessage = $"A subpasta {path} ainda não existe; ela é criada na primeira sincronização. Foi aberta a pasta escolhida.";
+            return;
+        }
+
+        StatusMessage = $"A pasta {path} não existe ou não está acessível.";
+        if (NotifyAsync != null)
+        {
+            await NotifyAsync("Pasta não encontrada", StatusMessage);
+        }
     }
 
     /// <summary>
@@ -1824,6 +1962,41 @@ public partial class MainViewModel : ViewModelBase
         {
             AddLog($"[ERRO] Não foi possível abrir a pasta: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Limita o percentual a 99% enquanto houver arquivos por terminar.
+    /// </summary>
+    /// <param name="percent">Percentual calculado pelo motor (por bytes).</param>
+    /// <param name="processedFiles">Arquivos concluídos.</param>
+    /// <param name="totalFiles">Total de arquivos da execução.</param>
+    public static double CapPercent(double percent, int processedFiles, int totalFiles) =>
+        processedFiles < totalFiles ? Math.Min(percent, 99) : percent;
+
+    /// <summary>
+    /// Escolhe a forma singular ou plural conforme a quantidade ("1 arquivo", "2 arquivos").
+    /// </summary>
+    public static string Plural(int count, string singular, string plural) =>
+        $"{count:N0} {(count == 1 ? singular : plural)}";
+
+    /// <summary>
+    /// Texto do resultado da restauração de lixo/, com concordância de número.
+    /// </summary>
+    /// <param name="restored">Arquivos devolvidos ao destino.</param>
+    /// <param name="keptInTrash">Arquivos mantidos em lixo/ porque já existiam no destino.</param>
+    /// <param name="failed">Falhas.</param>
+    public static string DescribeRestoreResult(int restored, int keptInTrash, int failed)
+    {
+        var parts = new List<string> { Plural(restored, "arquivo restaurado", "arquivos restaurados") };
+        if (keptInTrash > 0)
+        {
+            parts.Add(Plural(keptInTrash, "mantido", "mantidos") + " em lixo/ (já " + (keptInTrash == 1 ? "existia" : "existiam") + " no destino)");
+        }
+        if (failed > 0)
+        {
+            parts.Add(Plural(failed, "falha", "falhas"));
+        }
+        return string.Join(", ", parts) + ". Analise novamente para ver o estado atual.";
     }
 
     /// <summary>

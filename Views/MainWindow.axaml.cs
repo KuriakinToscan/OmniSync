@@ -4,6 +4,8 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using OmniSync.Models;
@@ -42,6 +44,15 @@ public partial class MainWindow : Window
             vm.SelectTrashEntriesAsync = SelectTrashEntriesAsync;
             vm.ConfirmAsync = (title, message, confirmText) => MessageDialog.ShowAsync(this, title, message, confirmText);
             vm.NotifyAsync = (title, message) => MessageDialog.InformAsync(this, title, message);
+            vm.PropertyChanged += (_, args) =>
+            {
+                // Lista nova (filtro, pasta ou busca): volta ao topo, sem deixar a 1ª linha sob o cabeçalho
+                if (args.PropertyName == nameof(MainViewModel.FilteredItems) && vm.FilteredItems.Count > 0)
+                {
+                    var first = vm.FilteredItems[0];
+                    Dispatcher.UIThread.Post(() => ItemsGrid.ScrollIntoView(first, null), DispatcherPriority.Background);
+                }
+            };
         }
     }
 
@@ -72,6 +83,48 @@ public partial class MainWindow : Window
         {
             vm.SaveSettings();
         }
+    }
+
+    /// <summary>
+    /// "Renomear" (lápis do cabeçalho ou menu do cartão): seleciona a tarefa do cartão, quando houver, e põe o foco
+    /// no nome do cabeçalho com o texto selecionado.
+    /// </summary>
+    private void OnRenameTaskClick(object? sender, RoutedEventArgs e) => BeginRename((sender as Control)?.DataContext as ProfileItemViewModel);
+
+    /// <summary>
+    /// Duplo clique no cartão da tarefa: renomear.
+    /// </summary>
+    private void OnTaskDoubleTapped(object? sender, TappedEventArgs e) => BeginRename((sender as Control)?.DataContext as ProfileItemViewModel);
+
+    private LogWindow? _logWindow;
+
+    /// <summary>
+    /// Abre a janela do registro (ou a traz para a frente, se já estiver aberta).
+    /// </summary>
+    private void OnShowLogClick(object? sender, RoutedEventArgs e)
+    {
+        if (_logWindow != null)
+        {
+            _logWindow.Activate();
+            return;
+        }
+        _logWindow = new LogWindow { DataContext = DataContext };
+        _logWindow.Closed += (_, _) => _logWindow = null;
+        _logWindow.Show(this);
+    }
+
+    private void BeginRename(ProfileItemViewModel? item)
+    {
+        if (DataContext is not MainViewModel vm || !vm.CanManageProfiles) return;
+        if (item != null && !ReferenceEquals(vm.SelectedProfile, item))
+        {
+            vm.SelectedProfile = item;
+        }
+        Dispatcher.UIThread.Post(() =>
+        {
+            ProfileNameBox.Focus();
+            ProfileNameBox.SelectAll();
+        }, DispatcherPriority.Input);
     }
 
     /// <summary>

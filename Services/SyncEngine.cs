@@ -130,7 +130,7 @@ public class SyncEngine : ISyncEngine
             result.Warnings.AddRange(source.Warnings);
             result.Warnings.AddRange(dest.Warnings);
 
-            logger?.Report($"Indexação concluída em {stopwatch.Elapsed.TotalSeconds:n1} s: Origem {source.Files.Count} arquivos, Destino {dest.Files.Count} arquivos.");
+            logger?.Report($"Indexação concluída em {FormatElapsed(stopwatch.Elapsed)}: Origem {source.Files.Count} arquivos, Destino {dest.Files.Count} arquivos.");
 
             // 2. Preparação para correspondência tolerante a maiúsculas/minúsculas (apenas em plataformas que diferenciam)
             Dictionary<string, List<string>>? sourceByFolded = null;
@@ -219,7 +219,7 @@ public class SyncEngine : ISyncEngine
             // 4. Verificação profunda SHA-256 em paralelo limitado
             if (hashJobs.Count > 0)
             {
-                logger?.Report($"Calculando SHA-256 de {hashJobs.Count} pares de mesmo tamanho (paralelismo {HashParallelism})...");
+                logger?.Report($"Calculando SHA-256 de {hashJobs.Count} arquivos de mesmo tamanho nos dois lados (paralelismo {HashParallelism})...");
                 var identical = new bool[hashJobs.Count];
                 int done = 0;
 
@@ -250,7 +250,7 @@ public class SyncEngine : ISyncEngine
                         var completed = Interlocked.Increment(ref done);
                         if (completed % 500 == 0)
                         {
-                            logger?.Report($"Hash: {completed}/{hashJobs.Count} pares verificados...");
+                            logger?.Report($"Hash: {completed}/{hashJobs.Count} arquivos verificados...");
                         }
                     });
 
@@ -299,7 +299,7 @@ public class SyncEngine : ISyncEngine
             }
 
             result.Items.Sort((a, b) => string.Compare(a.RelativePath, b.RelativePath, StringComparison.OrdinalIgnoreCase));
-            logger?.Report($"Varredura concluída em {stopwatch.Elapsed.TotalSeconds:n1} s. Total de itens analisados: {result.Items.Count}");
+            logger?.Report($"Varredura concluída em {FormatElapsed(stopwatch.Elapsed)}. Total de itens analisados: {result.Items.Count}");
             return result;
         }, cancellationToken);
     }
@@ -536,6 +536,14 @@ public class SyncEngine : ISyncEngine
             }
         }, cancellationToken);
     }
+
+    /// <summary>
+    /// Formata um tempo de análise para o registro: milissegundos abaixo de 1 s (ex.: <c>42 ms</c>), segundos acima.
+    /// </summary>
+    /// <param name="elapsed">Tempo decorrido.</param>
+    public static string FormatElapsed(TimeSpan elapsed) => elapsed.TotalSeconds < 1
+        ? $"{elapsed.TotalMilliseconds:N0} ms"
+        : elapsed.TotalSeconds < 10 ? $"{elapsed.TotalSeconds:N2} s" : $"{elapsed.TotalSeconds:N1} s";
 
     /// <summary>
     /// Impede combinações de Origem/Destino que levariam a recursão ou perda de dados.

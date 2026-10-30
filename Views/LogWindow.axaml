@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OmniSync.ViewModels"
+        x:Class="OmniSync.Views.LogWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/omnisync.ico"
+        Title="Registro da sessão — OmniSync"
+        Width="820" Height="560" MinWidth="480" MinHeight="300"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource OsCardBrush}">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="18,14,18,10">
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="Registro da sessão" FontSize="16" FontWeight="Bold" />
+                <TextBlock Text="Mais recentes no topo. O histórico completo de todas as execuções fica na pasta de logs." Classes="caption" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1" Classes="chip" Classes.active="{Binding !ShowOnlyProblems}" VerticalAlignment="Center"
+                    Command="{Binding SetShowOnlyProblemsCommand}" CommandParameter="{x:False}" Content="Tudo" />
+            <Button Grid.Column="2" Classes="chip" Classes.active="{Binding ShowOnlyProblems}" VerticalAlignment="Center"
+                    Command="{Binding SetShowOnlyProblemsCommand}" CommandParameter="{x:True}">
+                <TextBlock Text="{Binding ProblemLogCount, StringFormat='Avisos e erros · {0}'}" />
+            </Button>
+        </Grid>
+
+        <ListBox x:Name="LogList" Grid.Row="1" Classes="log" ItemsSource="{Binding ActivityLogs}" Background="Transparent"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="0,1,0,1">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:LogEntry">
+                    <Grid ColumnDefinitions="72,*" ColumnSpacing="10">
+                        <TextBlock Text="{Binding Time}" Classes="subtle mono" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" Classes="mono"
+                                             Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="18,10">
+            <TextBlock x:Name="CopyFeedback" Classes="subtle" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="secondary" Content="Copiar" Click="OnCopyClick"
+                    ToolTip.Tip="Copiar as linhas exibidas para colar numa mensagem ou num relatório" />
+            <Button Grid.Column="2" Classes="secondary" Content="Abrir pasta de logs" Command="{Binding OpenLogsFolderCommand}" />
+            <Button Grid.Column="3" Classes="accent primary" Content="Fechar" Click="OnCloseClick" IsCancel="True" />
+        </Grid>
+    </Grid>
+</Window>
