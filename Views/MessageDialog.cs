@@ -7,13 +7,13 @@ using Avalonia.Media;
 namespace OmniSync.Views;
 
 /// <summary>
-/// Diálogo modal simples de confirmação (título, mensagem, botão de ação e "Cancelar").
+/// Diálogo modal simples: confirmação (título, mensagem, botão de ação e "Cancelar") ou aviso com "OK".
 /// </summary>
 public sealed class MessageDialog : Window
 {
     private bool _result;
 
-    private MessageDialog(string title, string message, string confirmText)
+    private MessageDialog(string title, string message, string confirmText, bool showCancel = true)
     {
         Title = title;
         Width = 440;
@@ -27,9 +27,13 @@ public sealed class MessageDialog : Window
         confirm.Classes.Add("primary");
         confirm.Click += (_, _) => { _result = true; Close(); };
 
-        var cancel = new Button { Content = "Cancelar", IsCancel = true, MinHeight = 40 };
+        var cancel = new Button { Content = "Cancelar", IsCancel = true, MinHeight = 40, IsVisible = showCancel };
         cancel.Classes.Add("secondary");
         cancel.Click += (_, _) => Close();
+        if (!showCancel)
+        {
+            confirm.IsCancel = true;
+        }
 
         Content = new StackPanel
         {
@@ -62,5 +66,16 @@ public sealed class MessageDialog : Window
         var dialog = new MessageDialog(title, message, confirmText);
         await dialog.ShowDialog(owner);
         return dialog._result;
+    }
+
+    /// <summary>
+    /// Exibe um aviso com um único botão "OK" sobre <paramref name="owner"/>.
+    /// </summary>
+    /// <param name="owner">Janela proprietária.</param>
+    /// <param name="title">Título.</param>
+    /// <param name="message">Mensagem.</param>
+    public static Task InformAsync(Window owner, string title, string message)
+    {
+        return new MessageDialog(title, message, "OK", showCancel: false).ShowDialog(owner);
     }
 }

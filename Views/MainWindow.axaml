@@ -160,6 +160,7 @@
                                     </Button>
                                     <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
                                              PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
+                                             ToolTip.Tip="{Binding SourcePath}"
                                              AutomationProperties.Name="Diretório de origem" />
                                 </DockPanel>
                             </Border>
@@ -174,12 +175,24 @@
                                             <TextBlock Text="Escolher pasta…" />
                                         </StackPanel>
                                     </Button>
-                                    <TextBox Classes="mono" Text="{Binding DestinationPath}" VerticalAlignment="Top"
-                                             PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
-                                             AutomationProperties.Name="Diretório de destino" />
+                                    <StackPanel Spacing="6" VerticalAlignment="Top">
+                                        <TextBox Classes="mono" Text="{Binding DestinationPath}"
+                                                 PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
+                                                 ToolTip.Tip="{Binding DestinationPath}"
+                                                 AutomationProperties.Name="Diretório de destino" />
+                                        <TextBlock Classes="caption mono" Text="{Binding EffectiveDestinationHint}" TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasEffectiveDestinationHint}" />
+                                    </StackPanel>
                                 </DockPanel>
                             </Border>
                         </Grid>
+
+                        <Border Classes="danger-banner" IsVisible="{Binding HasPairProblem}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                <TextBlock Grid.Column="1" Text="{Binding PairProblem}" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
 
                         <Border Classes="card" Padding="20,16">
                             <StackPanel Spacing="14">
@@ -216,7 +229,7 @@
                             </StackPanel>
                         </Border>
 
-                        <StackPanel Orientation="Horizontal" Spacing="16">
+                        <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12">
                             <Button Classes="accent primary large" Command="{Binding ScanCommand}" IsVisible="{Binding !IsScanning}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <PathIcon Data="{StaticResource IconSearch}" Classes="small" />
@@ -224,9 +237,13 @@
                                     <TextBlock Text="F5" FontWeight="Normal" Opacity="0.8" />
                                 </StackPanel>
                             </Button>
-                            <TextBlock Text="{Binding ScanHint}" Classes="subtle" VerticalAlignment="Center" IsVisible="{Binding !IsScanning}" />
+                            <Button Grid.Column="1" Classes="secondary large" Command="{Binding ReturnToPlanCommand}"
+                                    IsVisible="{Binding CanReturnToPlan}" Content="Voltar ao plano"
+                                    ToolTip.Tip="Retomar o plano como estava, com as decisões já tomadas" />
+                            <TextBlock Grid.Column="2" Text="{Binding ScanHint}" Classes="subtle" VerticalAlignment="Center"
+                                       TextWrapping="Wrap" IsVisible="{Binding !IsScanning}" />
 
-                            <Border Classes="card" Padding="14,10" IsVisible="{Binding IsScanning}" MinWidth="460">
+                            <Border Grid.ColumnSpan="3" Classes="card" Padding="14,10" IsVisible="{Binding IsScanning}" MinWidth="460" HorizontalAlignment="Left">
                                 <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="14" RowSpacing="8">
                                     <TextBlock Text="Analisando origem e destino…" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <Button Grid.Column="1" Grid.RowSpan="2" Classes="secondary danger-text" Command="{Binding CancelCommand}"
@@ -234,7 +251,7 @@
                                     <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="6" CornerRadius="3" />
                                 </Grid>
                             </Border>
-                        </StackPanel>
+                        </Grid>
 
                         <Border Classes="warning-banner" IsVisible="{Binding HasScanWarnings}">
                             <ItemsControl ItemsSource="{Binding ScanWarnings}">
@@ -277,7 +294,7 @@
                         <Border Classes="card" Padding="14,10">
                             <StackPanel Spacing="3">
                                 <TextBlock Text="ORIGEM" Classes="eyebrow" />
-                                <TextBlock Text="{Binding SourcePath}" Classes="mono" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SourcePath}" />
+                                <TextBlock Text="{Binding SourcePath}" Classes="mono" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding SourcePath}" />
                                 <TextBlock Text="{Binding SourceStatsText}" Classes="caption" />
                             </StackPanel>
                         </Border>
@@ -285,7 +302,7 @@
                         <Border Grid.Column="2" Classes="card" Padding="14,10">
                             <StackPanel Spacing="3">
                                 <TextBlock Text="DESTINO" Classes="eyebrow" />
-                                <TextBlock Text="{Binding DestinationPath}" Classes="mono" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DestinationPath}" />
+                                <TextBlock Text="{Binding EffectiveDestinationPath}" Classes="mono" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding EffectiveDestinationPath}" />
                                 <TextBlock Text="{Binding DestinationStatsText}" Classes="caption" />
                             </StackPanel>
                         </Border>
@@ -518,10 +535,13 @@
                                                 <PathIcon Data="{StaticResource IconClose}" Classes="small" />
                                             </Button>
                                         </Grid>
-                                        <StackPanel Spacing="3">
-                                            <TextBlock Text="{Binding FileName}" Classes="mono" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding FolderDisplay}" Classes="caption" TextWrapping="Wrap" />
-                                        </StackPanel>
+                                        <Border Classes="inset" Padding="10,8">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Classes="eyebrow" Text="ARQUIVO SELECIONADO" />
+                                                <TextBlock Text="{Binding FileName}" Classes="mono" FontSize="15" FontWeight="Bold" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding FolderDisplay}" Classes="caption" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
 
                                         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                             <Border Classes="side-card" Classes.newer="{Binding IsSourceNewer}" IsVisible="{Binding HasSource}">
@@ -541,6 +561,8 @@
                                         </Grid>
 
                                         <TextBlock Text="{Binding PlanDescription}" TextWrapping="Wrap" />
+                                        <TextBlock Classes="warning" FontWeight="SemiBold" TextWrapping="Wrap" IsVisible="{Binding IsDestinationNewer}"
+                                                   Text="Atenção: a versão do destino é a mais recente. Substituir troca por uma versão mais antiga." />
 
                                         <StackPanel Spacing="6" IsVisible="{Binding CanDecide}">
                                             <Border Classes="option-card" Classes.checked="{Binding IsResolutionReplace}">

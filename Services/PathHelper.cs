@@ -69,6 +69,78 @@ public static class PathHelper
     }
 
     /// <summary>
+    /// Calcula o diretório de destino efetivo. Com <paramref name="useSourceFolderName"/> ativo (ou quando o destino é
+    /// a raiz de um disco, ex.: <c>G:\</c>), anexa o nome da pasta de origem, exceto se o destino já terminar nele.
+    /// </summary>
+    /// <param name="sourcePath">Pasta de Origem.</param>
+    /// <param name="destPath">Pasta de Destino escolhida pelo usuário.</param>
+    /// <param name="useSourceFolderName">Opção "Criar subpasta com o nome da origem".</param>
+    /// <returns>Destino efetivo, ou vazio quando o destino não foi informado.</returns>
+    public static string ResolveEffectiveDestination(string? sourcePath, string? destPath, bool useSourceFolderName)
+    {
+        if (string.IsNullOrWhiteSpace(destPath)) return string.Empty;
+        destPath = destPath.Trim();
+        if (string.IsNullOrWhiteSpace(sourcePath)) return destPath;
+
+        var trimmedSource = sourcePath.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var sourceFolderName = Path.GetFileName(trimmedSource);
+        if (string.IsNullOrWhiteSpace(sourceFolderName))
+        {
+            return destPath;
+        }
+
+        var trimmedDest = destPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var destFolderName = Path.GetFileName(trimmedDest);
+        var destRoot = Path.GetPathRoot(destPath)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        bool isDestDriveRoot = string.IsNullOrEmpty(destFolderName) ||
+                               string.Equals(trimmedDest, destRoot, StringComparison.OrdinalIgnoreCase);
+
+        if ((useSourceFolderName || isDestDriveRoot) &&
+            !string.Equals(sourceFolderName, destFolderName, StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.Combine(destPath, sourceFolderName);
+        }
+
+        return destPath;
+    }
+
+    /// <summary>
+    /// Descreve por que um par Origem/Destino não pode ser sincronizado (mesma pasta ou uma dentro da outra).
+    /// Os caminhos podem vir crus da interface; são normalizados aqui.
+    /// </summary>
+    /// <param name="sourceDir">Diretório de Origem.</param>
+    /// <param name="destDir">Diretório de Destino efetivo.</param>
+    /// <returns>Mensagem para o usuário, ou <c>null</c> quando o par é válido (ou ainda incompleto).</returns>
+    public static string? DescribePairProblem(string? sourceDir, string? destDir)
+    {
+        if (string.IsNullOrWhiteSpace(sourceDir) || string.IsNullOrWhiteSpace(destDir)) return null;
+        string source, dest;
+        try
+        {
+            source = NormalizeDirectory(sourceDir);
+            dest = NormalizeDirectory(destDir);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+
+        if (AreSamePath(source, dest))
+        {
+            return "O diretório de Origem e o de Destino não podem ser a mesma pasta.";
+        }
+        if (IsSubPathOf(dest, source))
+        {
+            return "O Destino está dentro da Origem. Isso faria a origem incluir as próprias cópias, 'lixo/' e 'old/' a cada execução. Escolha um destino fora da origem.";
+        }
+        if (IsSubPathOf(source, dest))
+        {
+            return "A Origem está dentro do Destino. Todo o restante do destino seria tratado como órfão. Marque 'Criar subpasta com o nome da origem' ou escolha outro destino.";
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Confirma se o primeiro segmento de um caminho relativo é uma pasta reservada (<c>lixo</c> ou <c>old</c>).
     /// </summary>
     public static bool IsReservedFolderName(string name)

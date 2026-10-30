@@ -66,6 +66,22 @@
             </StackPanel>
         </Border>
 
+        <Border Classes="danger-banner" Margin="24,0,24,14" IsVisible="{Binding Summary.HasDestinationNewerReplacements}">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                    <TextBlock Grid.Column="1" TextWrapping="Wrap">
+                        <Run Text="Substituição de versões mais novas." FontWeight="Bold" />
+                        <Run Text="Nestes arquivos o destino foi modificado depois da origem; a versão mais antiga da origem vai ocupar o lugar." />
+                    </TextBlock>
+                </Grid>
+                <TextBlock Classes="mono" FontSize="12" TextWrapping="Wrap" Margin="26,0,0,0" Text="{Binding DestinationNewerListText}" />
+                <CheckBox IsChecked="{Binding DestinationNewerAcknowledged}" Margin="26,0,0,0">
+                    <TextBlock Text="{Binding DestinationNewerText}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                </CheckBox>
+            </StackPanel>
+        </Border>
+
         <Border Classes="danger-banner" Margin="24,0,24,16" IsVisible="{Binding Summary.IsMassOrphan}">
             <StackPanel Spacing="8">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">

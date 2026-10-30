@@ -43,6 +43,8 @@ public partial class MainViewModel : ViewModelBase
     private int _lastDestinationFileCount;
     private int _lastSourceFileCount;
     private IReadOnlyList<string> _lastScanWarnings = Array.Empty<string>();
+    private readonly DecisionMemory _decisionMemory = new();
+    private string? _planPairKey;
 
     // Contadores da execução em andamento, por fase
     private int _runCopyTotal, _runCopyDone, _runReplaceTotal, _runReplaceDone, _runTrashTotal, _runTrashDone;
@@ -68,6 +70,12 @@ public partial class MainViewModel : ViewModelBase
     /// Quando não definido, a resposta é "sim".
     /// </summary>
     public Func<string, string, string, Task<bool>>? ConfirmAsync { get; set; }
+
+    /// <summary>
+    /// Delegate injetado pela View para avisos com um único botão (título, mensagem).
+    /// Quando não definido, o aviso vai só para a mensagem de estado.
+    /// </summary>
+    public Func<string, string, Task>? NotifyAsync { get; set; }
 
     /// <summary>
     /// Delegate injetado pela View para escolher onde salvar o relatório CSV.
@@ -170,6 +178,13 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private bool _isShowingResult = false;
+
+    /// <summary>
+    /// Indica que o usuário voltou à configuração com um plano ainda carregado ("Alterar").
+    /// O plano só é descartado se algum caminho ou opção mudar; até lá, "Voltar ao plano" o recupera intacto.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isEditingSetup;
 
     /// <summary>
     /// Balanço da última sincronização da sessão.
@@ -381,11 +396,45 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public bool HasItems => Items.Count > 0;
 
-    /// <summary>Tela de configuração do par (sem plano carregado).</summary>
-    public bool IsSetupScreen => !IsRunningSync && !IsShowingResult && Items.Count == 0;
+    /// <summary>Tela de configuração do par (sem plano carregado, ou editando com o plano guardado).</summary>
+    public bool IsSetupScreen => !IsRunningSync && !IsShowingResult && (Items.Count == 0 || IsEditingSetup);
 
     /// <summary>Tela do plano analisado.</summary>
-    public bool IsPlanScreen => !IsRunningSync && !IsShowingResult && Items.Count > 0;
+    public bool IsPlanScreen => !IsRunningSync && !IsShowingResult && Items.Count > 0 && !IsEditingSetup;
+
+    /// <summary>Indica se a configuração foi aberta a partir de um plano que ainda pode ser retomado.</summary>
+    public bool CanReturnToPlan => IsEditingSetup && Items.Count > 0 && !IsBusy;
+
+    /// <summary>
+    /// Destino efetivo: a pasta escolhida, mais a subpasta com o nome da origem quando a opção está marcada.
+    /// </summary>
+    public string EffectiveDestinationPath =>
+        PathHelper.ResolveEffectiveDestination(SourcePath, DestinationPath, UseSourceFolderNameInDestination);
+
+    /// <summary>
+    /// Linha "Sincroniza em: …" sob o destino, exibida quando o destino efetivo difere da pasta escolhida.
+    /// </summary>
+    public string EffectiveDestinationHint
+    {
+        get
+        {
+            var effective = EffectiveDestinationPath;
+            return string.IsNullOrWhiteSpace(effective) || string.Equals(effective, DestinationPath.Trim(), StringComparison.Ordinal)
+                ? string.Empty
+                : $"Sincroniza em: {effective}";
+        }
+    }
+
+    /// <summary>Indica se a linha "Sincroniza em: …" deve ser exibida.</summary>
+    public bool HasEffectiveDestinationHint => EffectiveDestinationHint.Length > 0;
+
+    /// <summary>
+    /// Problema do par Origem/Destino detectado na hora da escolha (mesma pasta ou uma dentro da outra).
+    /// </summary>
+    public string? PairProblem => PathHelper.DescribePairProblem(SourcePath, EffectiveDestinationPath);
+
+    /// <summary>Indica se há problema no par Origem/Destino.</summary>
+    public bool HasPairProblem => PairProblem != null;
 
     /// <summary>Tela de execução.</summary>
     public bool IsRunScreen => IsRunningSync;
@@ -411,7 +460,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Indica se o botão "Analisar" pode ser acionado.
     /// </summary>
-    public bool CanScan => !IsBusy && !string.IsNullOrWhiteSpace(SourcePath) && !string.IsNullOrWhiteSpace(DestinationPath);
+    public bool CanScan => !IsBusy && !string.IsNullOrWhiteSpace(SourcePath) && !string.IsNullOrWhiteSpace(DestinationPath) && !HasPairProblem;
 
     /// <summary>
     /// Texto de ajuda sob o botão "Analisar" quando ele está desabilitado.
@@ -420,7 +469,9 @@ public partial class MainViewModel : ViewModelBase
         ? "Escolha a origem para analisar."
         : string.IsNullOrWhiteSpace(DestinationPath)
             ? "Escolha o destino para analisar."
-            : StatusMessage;
+            : HasPairProblem
+                ? "Corrija a origem ou o destino para analisar."
+                : StatusMessage;
 
     /// <summary>
     /// Indica se o botão "Sincronizar" pode ser acionado (requer itens pendentes de ação).
@@ -788,8 +839,21 @@ public partial class MainViewModel : ViewModelBase
         {
             ProfileName = SyncProfile.SuggestName(newValue);
         }
+        NotifyDestination();
         InvalidatePlan();
         RefreshSetupStatus();
+    }
+
+    /// <summary>
+    /// Atualiza o destino efetivo e o aviso de par inválido exibidos na configuração.
+    /// </summary>
+    private void NotifyDestination()
+    {
+        OnPropertyChanged(nameof(EffectiveDestinationPath));
+        OnPropertyChanged(nameof(EffectiveDestinationHint));
+        OnPropertyChanged(nameof(HasEffectiveDestinationHint));
+        OnPropertyChanged(nameof(PairProblem));
+        OnPropertyChanged(nameof(HasPairProblem));
     }
 
     /// <summary>
@@ -808,6 +872,7 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnDestinationPathChanged(string value)
     {
+        NotifyDestination();
         InvalidatePlan();
         RefreshSetupStatus();
     }
@@ -818,7 +883,14 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnExcludePatternsTextChanged(string value) => InvalidatePlan();
 
-    partial void OnUseSourceFolderNameInDestinationChanged(bool value) => InvalidatePlan();
+    partial void OnUseSourceFolderNameInDestinationChanged(bool value)
+    {
+        NotifyDestination();
+        InvalidatePlan();
+        RefreshSetupStatus();
+    }
+
+    partial void OnIsEditingSetupChanged(bool value) => NotifyScreens();
 
     partial void OnIsScanningChanged(bool value)
     {
@@ -862,6 +934,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void NotifyScreens()
     {
+        OnPropertyChanged(nameof(CanReturnToPlan));
         OnPropertyChanged(nameof(IsSetupScreen));
         OnPropertyChanged(nameof(IsPlanScreen));
         OnPropertyChanged(nameof(IsRunScreen));
@@ -904,6 +977,12 @@ public partial class MainViewModel : ViewModelBase
 
     private void ClearPlan()
     {
+        if (Items.Count > 0 && _planPairKey != null)
+        {
+            _decisionMemory.Capture(_planPairKey, Items);
+        }
+        _planPairKey = null;
+        IsEditingSetup = false;
         foreach (var item in Items.Where(i => i.IsConflict))
         {
             item.PropertyChanged -= OnConflictItemChanged;
@@ -968,39 +1047,11 @@ public partial class MainViewModel : ViewModelBase
     /// <param name="sourcePath">Caminho da pasta de Origem.</param>
     /// <param name="destPath">Caminho da pasta de Destino informada.</param>
     /// <returns>Caminho de destino resolvido com segurança.</returns>
-    public string ResolveEffectiveDestinationPath(string sourcePath, string destPath)
-    {
-        if (string.IsNullOrWhiteSpace(destPath)) return string.Empty;
-        destPath = destPath.Trim();
-        if (string.IsNullOrWhiteSpace(sourcePath)) return destPath;
-
-        var trimmedSource = sourcePath.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var sourceFolderName = Path.GetFileName(trimmedSource);
-
-        if (string.IsNullOrWhiteSpace(sourceFolderName))
-        {
-            return destPath;
-        }
-
-        var trimmedDest = destPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var destFolderName = Path.GetFileName(trimmedDest);
-        var destRoot = Path.GetPathRoot(destPath)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        bool isDestDriveRoot = string.IsNullOrEmpty(destFolderName) ||
-                               string.Equals(trimmedDest, destRoot, StringComparison.OrdinalIgnoreCase);
-
-        if (UseSourceFolderNameInDestination || isDestDriveRoot)
-        {
-            if (!string.Equals(sourceFolderName, destFolderName, StringComparison.OrdinalIgnoreCase))
-            {
-                return Path.Combine(destPath, sourceFolderName);
-            }
-        }
-
-        return destPath;
-    }
+    public string ResolveEffectiveDestinationPath(string sourcePath, string destPath) =>
+        PathHelper.ResolveEffectiveDestination(sourcePath, destPath, UseSourceFolderNameInDestination);
 
     /// <summary>
-    /// Abre o seletor de pastas para escolha do diretório de Origem e atualiza a subpasta correspondente no Destino.
+    /// Abre o seletor de pastas para escolha do diretório de Origem.
     /// </summary>
     [RelayCommand]
     private async Task BrowseSourceAsync()
@@ -1009,30 +1060,10 @@ public partial class MainViewModel : ViewModelBase
         {
             if (PickFolderAsync != null)
             {
-                var previousSourceFolder = string.IsNullOrWhiteSpace(SourcePath)
-                    ? null
-                    : Path.GetFileName(SourcePath.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-
                 var folder = await PickFolderAsync(SourcePath);
                 if (!string.IsNullOrEmpty(folder))
                 {
                     SourcePath = folder;
-
-                    if (!string.IsNullOrWhiteSpace(DestinationPath) && UseSourceFolderNameInDestination)
-                    {
-                        var baseDest = DestinationPath.Trim();
-                        var destName = Path.GetFileName(baseDest.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                        if (!string.IsNullOrEmpty(previousSourceFolder) &&
-                            string.Equals(destName, previousSourceFolder, StringComparison.OrdinalIgnoreCase))
-                        {
-                            var parent = Path.GetDirectoryName(baseDest.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                            if (!string.IsNullOrEmpty(parent))
-                            {
-                                baseDest = parent;
-                            }
-                        }
-                        DestinationPath = ResolveEffectiveDestinationPath(SourcePath, baseDest);
-                    }
                 }
             }
         }
@@ -1056,7 +1087,7 @@ public partial class MainViewModel : ViewModelBase
                 var folder = await PickFolderAsync(DestinationPath);
                 if (!string.IsNullOrEmpty(folder))
                 {
-                    DestinationPath = ResolveEffectiveDestinationPath(SourcePath, folder);
+                    DestinationPath = folder;
                 }
             }
         }
@@ -1068,16 +1099,29 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Volta para a tela de configuração do par, descartando o plano carregado.
+    /// Volta para a tela de configuração do par sem descartar o plano: ele só é descartado se algum caminho ou
+    /// opção mudar, e as decisões de conflito já tomadas são reaplicadas na próxima análise.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanManageProfiles))]
     private void EditSetup()
     {
-        ClearPlan();
         IsShowingResult = false;
-        SelectedProfile?.RefreshFromLastRun();
-        StatusMessage = "Ajuste as pastas ou as opções e analise novamente.";
+        IsEditingSetup = Items.Count > 0;
+        StatusMessage = IsEditingSetup
+            ? "Nada mudou ainda: \"Voltar ao plano\" retoma o plano como estava."
+            : "Ajuste as pastas ou as opções e analise novamente.";
         NotifyCommands();
+    }
+
+    /// <summary>
+    /// Sai da configuração e retoma o plano guardado, com as decisões como estavam.
+    /// </summary>
+    [RelayCommand]
+    private void ReturnToPlan()
+    {
+        if (Items.Count == 0) return;
+        IsEditingSetup = false;
+        StatusMessage = "Plano retomado.";
     }
 
     /// <summary>
@@ -1106,12 +1150,7 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        var effectiveDest = ResolveEffectiveDestinationPath(SourcePath, DestinationPath);
-        if (!string.Equals(effectiveDest, DestinationPath.Trim(), StringComparison.Ordinal))
-        {
-            DestinationPath = effectiveDest;
-            AddLog($"[INFO] Destino ajustado automaticamente para a subpasta da origem: {effectiveDest}");
-        }
+        var effectiveDest = EffectiveDestinationPath;
 
         SaveSettings();
         ClearPlan();
@@ -1137,12 +1176,20 @@ public partial class MainViewModel : ViewModelBase
         {
             var scan = await _syncEngine.ScanDirectoriesAsync(
                 SourcePath.Trim(),
-                DestinationPath.Trim(),
+                effectiveDest,
                 options,
                 new InlineProgress<string>(AddLog),
                 _cts!.Token);
 
             Items.AddRange(scan.Items);
+            _planPairKey = DecisionMemory.PairKey(SourcePath, effectiveDest);
+            int restored = _decisionMemory.Apply(_planPairKey, Items);
+            if (restored > 0)
+            {
+                AddLog(restored == 1
+                    ? "1 decisão de conflito da análise anterior foi mantida (o arquivo não mudou)."
+                    : $"{restored} decisões de conflito da análise anterior foram mantidas (os arquivos não mudaram).");
+            }
             foreach (var item in Items.Where(i => i.IsConflict))
             {
                 item.PropertyChanged += OnConflictItemChanged;
@@ -1158,7 +1205,8 @@ public partial class MainViewModel : ViewModelBase
             BuildFolderTree();
             UpdateCounts();
             ApplyFilter();
-            SelectedItem = FilteredItems.FirstOrDefault(i => i.IsConflict && i.Resolution == ConflictResolution.AskUser);
+            // Nenhum conflito é selecionado sozinho: o painel de decisão só abre no arquivo que o usuário escolher
+            SelectedItem = null;
 
             StatusMessage = $"Análise concluída: {NewCount} novos, {ConflictCount} conflitos, {TrashCount} órfãos p/ lixo/, {IdenticalCount} idênticos" +
                             (scan.Warnings.Count > 0 ? $" · {scan.Warnings.Count} aviso(s)." : ".");
@@ -1207,7 +1255,11 @@ public partial class MainViewModel : ViewModelBase
         return new SyncPlanSummary
         {
             SourcePath = SourcePath.Trim(),
-            DestinationPath = DestinationPath.Trim(),
+            DestinationPath = EffectiveDestinationPath,
+            DestinationNewerReplacements = conflicts
+                .Where(i => i.Resolution == ConflictResolution.Replace && i.IsDestinationNewer)
+                .Select(i => i.RelativePath)
+                .ToList(),
             NewCount = pending.Count(i => i.IsNew),
             NewBytes = pending.Where(i => i.IsNew).Sum(i => i.SourceSize),
             ReplaceCount = conflicts.Count(i => i.Resolution == ConflictResolution.Replace),
@@ -1305,7 +1357,7 @@ public partial class MainViewModel : ViewModelBase
         {
             result = await _syncEngine.ExecuteSyncAsync(
                 Items,
-                DestinationPath.Trim(),
+                EffectiveDestinationPath,
                 ResolveConflictHandler,
                 _itemUpdateQueue,
                 progress,
@@ -1593,7 +1645,7 @@ public partial class MainViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(DestinationPath)) return;
 
-        var dest = ResolveEffectiveDestinationPath(SourcePath, DestinationPath);
+        var dest = EffectiveDestinationPath;
         IsSyncing = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Lendo a pasta lixo/...";
@@ -1677,13 +1729,13 @@ public partial class MainViewModel : ViewModelBase
     /// Abre a pasta <c>destino/lixo/</c> no gerenciador de arquivos do sistema operacional.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanOpenDestinationFolders))]
-    private void OpenTrashFolder() => OpenDestinationSubfolder(PathHelper.TrashFolderName);
+    private Task OpenTrashFolderAsync() => OpenDestinationSubfolderAsync(PathHelper.TrashFolderName);
 
     /// <summary>
     /// Abre a pasta <c>destino/old/</c> no gerenciador de arquivos do sistema operacional.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanOpenDestinationFolders))]
-    private void OpenOldFolder() => OpenDestinationSubfolder(PathHelper.OldFolderName);
+    private Task OpenOldFolderAsync() => OpenDestinationSubfolderAsync(PathHelper.OldFolderName);
 
     /// <summary>
     /// Abre a pasta de logs do aplicativo.
@@ -1717,9 +1769,10 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Garante a criação da subpasta solicitada (<c>lixo</c> ou <c>old</c>) dentro do destino e a abre.
+    /// Abre a subpasta reservada (<c>lixo</c> ou <c>old</c>) do destino efetivo. Não cria a pasta: se ela ainda não
+    /// existe, avisa que será criada pela primeira sincronização que precisar dela.
     /// </summary>
-    private void OpenDestinationSubfolder(string subFolder)
+    private async Task OpenDestinationSubfolderAsync(string subFolder)
     {
         if (string.IsNullOrWhiteSpace(DestinationPath))
         {
@@ -1729,10 +1782,22 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            var effectiveDest = ResolveEffectiveDestinationPath(SourcePath, DestinationPath);
-            var fullPath = Path.GetFullPath(Path.Combine(effectiveDest, subFolder));
-            Directory.CreateDirectory(fullPath);
-            OpenInFileManager(fullPath);
+            var fullPath = Path.GetFullPath(Path.Combine(EffectiveDestinationPath, subFolder));
+            if (Directory.Exists(fullPath))
+            {
+                OpenInFileManager(fullPath);
+                return;
+            }
+
+            var purpose = subFolder == PathHelper.TrashFolderName
+                ? "Ela é criada na primeira sincronização que mover para lá arquivos que existem só no destino."
+                : "Ela é criada na primeira sincronização que substituir um arquivo, para guardar a versão anterior.";
+            var message = $"A pasta {subFolder}/ ainda não existe em {EffectiveDestinationPath}. {purpose}";
+            StatusMessage = message;
+            if (NotifyAsync != null)
+            {
+                await NotifyAsync($"A pasta {subFolder}/ ainda não existe", message);
+            }
         }
         catch (Exception ex)
         {

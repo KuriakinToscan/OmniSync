@@ -543,19 +543,10 @@ public class SyncEngine : ISyncEngine
     /// <exception cref="InvalidOperationException">As pastas são iguais ou uma está dentro da outra.</exception>
     private static void ValidateDirectoryPair(string sourceDir, string destDir)
     {
-        if (PathHelper.AreSamePath(sourceDir, destDir))
+        var problem = PathHelper.DescribePairProblem(sourceDir, destDir);
+        if (problem != null)
         {
-            throw new InvalidOperationException("O diretório de Origem e o de Destino não podem ser a mesma pasta.");
-        }
-        if (PathHelper.IsSubPathOf(destDir, sourceDir))
-        {
-            throw new InvalidOperationException(
-                "O Destino está dentro da Origem. Isso faria a origem incluir as próprias cópias, 'lixo/' e 'old/' a cada execução. Escolha um destino fora da origem.");
-        }
-        if (PathHelper.IsSubPathOf(sourceDir, destDir))
-        {
-            throw new InvalidOperationException(
-                "A Origem está dentro do Destino. Todo o restante do destino seria tratado como órfão. Ative 'subpasta com nome da origem' ou escolha outro destino.");
+            throw new InvalidOperationException(problem);
         }
     }
 

@@ -41,6 +41,7 @@ public partial class MainWindow : Window
             vm.PickSaveFileAsync = PickSaveFileAsync;
             vm.SelectTrashEntriesAsync = SelectTrashEntriesAsync;
             vm.ConfirmAsync = (title, message, confirmText) => MessageDialog.ShowAsync(this, title, message, confirmText);
+            vm.NotifyAsync = (title, message) => MessageDialog.InformAsync(this, title, message);
         }
     }
 
