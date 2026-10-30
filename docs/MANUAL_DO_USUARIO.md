@@ -20,21 +20,21 @@ Manual do **OmniSync**, sincronizador visual de arquivos para **Windows e Linux*
 
 A janela tem um cabeçalho, uma barra lateral e uma área principal que muda conforme a etapa.
 
-- **Cabeçalho**: nome do par ativo (clique para renomear), **Registro** (log da sessão) e **Logs** (pasta com o histórico completo).
-- **Barra lateral · Pares salvos**: cada par guarda origem, destino e opções. O ponto colorido indica o estado:
+- **Cabeçalho**: nome da tarefa ativa (clique no nome ou no lápis para renomear), **Registro** (janela redimensionável com o log da sessão, filtro **Avisos e erros** e **Copiar**) e **Logs** (pasta com o histórico completo).
+- **Barra lateral · Tarefas**: cada tarefa guarda origem, destino e opções. O ponto colorido indica o estado:
   - cinza: sem análise ou nunca sincronizado;
   - laranja: plano analisado aguardando sincronização;
   - verde-azulado: sincronizando;
   - verde: última sincronização sem falhas;
   - vermelho: última sincronização com falhas ou interrompida.
 
-  O botão **+** (ou Ctrl+N) cria um par. Clique com o botão direito em um par para removê-lo; só a configuração é apagada, nenhum arquivo é tocado.
-- **Barra lateral · Pastas de segurança**: **Restaurar de lixo/**, **Abrir lixo/** e **Abrir old/** do par ativo.
+  O botão **+** (ou Ctrl+N) cria uma tarefa. Para excluir, use o **X** do cartão (aparece ao passar o mouse) ou o botão direito › **Excluir tarefa**; só a configuração é apagada, nenhum arquivo é tocado. Duplo clique ou botão direito › **Renomear** muda o nome.
+- **Barra lateral · Pastas de segurança**: **Restaurar de lixo/**, **Abrir lixo/** e **Abrir old/** da tarefa ativa. Os atalhos não criam as pastas: se ainda não existirem, o aplicativo avisa.
 
 A área principal tem quatro telas:
 
 1. **Configuração**: origem, destino e opções. Aparece enquanto não há análise.
-   - **Criar subpasta com o nome da origem** *(marcado por padrão)*: com Origem `E:\Fotos` e Destino `G:\`, a sincronização ocorre em `G:\Fotos`, sem afetar outras pastas de `G:\`.
+   - **Criar subpasta com o nome da origem** *(marcado por padrão)*: com Origem `E:\Fotos` e Destino `G:\`, a sincronização ocorre em `G:\Fotos`, sem afetar outras pastas de `G:\`. O campo guarda só a pasta escolhida (`G:\`); a linha **Sincroniza em** abaixo dele mostra o destino efetivo.
    - **Verificar conteúdo (SHA-256)**: arquivos de mesmo tamanho são comparados pelo conteúdo, e não pela data. Mais lento, mais seguro.
    - **Tolerar 1 h (horário de verão)**: considera iguais arquivos cuja data difere exatamente 1 hora. Útil com pendrives e HDs em FAT/exFAT, que gravam hora local.
    - **Ignorar**: padrões separados por ponto e vírgula, aplicados ao nome de arquivos e pastas nos dois lados (`*` e `?` como curingas). Padrão: `Thumbs.db; desktop.ini; .DS_Store; ~$*`.
@@ -45,8 +45,8 @@ A área principal tem quatro telas:
    - a **lista de arquivos**, com busca por caminho. Para conflitos, a coluna Ação mostra a decisão atual;
    - o **painel de detalhes** do arquivo selecionado: tamanho e data nos dois lados (o mais recente fica destacado), o que vai acontecer e, para conflitos, a decisão;
    - a **barra inferior** resume o plano (copiar, substituir, manter, sem decisão, mover para `lixo/`) e traz **Exportar CSV** e **Revisar e sincronizar** (Ctrl+Enter).
-3. **Execução**: percentual, volume e arquivos processados, velocidade, tempo restante, andamento por fase (cópias, conflitos, `lixo/`), arquivo atual e o registro da atividade, com filtro **Avisos e erros**. **Cancelar** (Esc) interrompe sem deixar arquivo parcial.
-4. **Resultado**: balanço (copiados, substituídos, mantidos, movidos para `lixo/`, falhas), a lista do que não foi feito com o motivo, **Tentar de novo** e atalhos para `lixo/`, `old/`, relatório CSV e nova análise. **Ver arquivos** volta à lista com o estado de cada item.
+3. **Execução**: percentual (fica em no máximo 99% enquanto houver arquivo por terminar; durante um conflito aparece a faixa **Aguardando sua decisão**), volume e arquivos processados, velocidade, tempo restante, andamento por fase (cópias, conflitos, `lixo/`), arquivo atual e o registro da atividade, com filtro **Avisos e erros**. **Cancelar** (Esc) interrompe sem deixar arquivo parcial.
+4. **Resultado**: balanço (copiados, substituídos, mantidos, movidos para `lixo/`, falhas), a lista do que não foi feito com o motivo, **Tentar de novo** e atalhos para `lixo/`, `old/`, relatório CSV e **Analisar novamente** (F5). **Ver arquivos** volta à lista com o estado de cada item.
 
 Em janelas com menos de 1.240 px de largura, a árvore de pastas é ocultada para dar espaço à lista e ao painel de detalhes.
 
@@ -54,10 +54,10 @@ Em janelas com menos de 1.240 px de largura, a árvore de pastas é ocultada par
 
 ## 2. Passo a Passo de Uso
 
-### Etapa 1: escolher ou criar o par
-1. Selecione um par na barra lateral, ou crie um com **+**.
-2. Em **Origem**, clique em **Escolher pasta…** (ou cole o caminho). O par recebe o nome da pasta de origem; você pode renomeá-lo no cabeçalho.
-3. Faça o mesmo em **Destino**. Com **Criar subpasta com o nome da origem** marcada, o nome da pasta de origem é acrescentado ao destino (ex.: `G:\MinhaPasta`).
+### Etapa 1: escolher ou criar a tarefa
+1. Selecione uma tarefa na barra lateral, ou crie uma com **+**.
+2. Em **Origem**, clique em **Escolher pasta…** (ou cole o caminho). A tarefa recebe o nome da pasta de origem; você pode renomeá-la no cabeçalho. **Abrir no Explorer** (ou no gerenciador de arquivos) mostra a pasta.
+3. Faça o mesmo em **Destino**. Com **Criar subpasta com o nome da origem** marcada, o nome da pasta de origem é acrescentado ao destino (ex.: `G:\MinhaPasta`). Se origem e destino forem a mesma pasta, ou uma estiver dentro da outra, um aviso vermelho aparece na hora e **Analisar** fica bloqueado.
 
 ### Etapa 2: analisar (Dry-Run)
 1. Clique em **Analisar** (ou F5). Nenhum arquivo é alterado.
@@ -71,7 +71,7 @@ Se você alterar pastas ou opções depois da análise (botão **Alterar**), o p
 2. Revise a janela **Revise antes de sincronizar**: quantos arquivos serão copiados, substituídos, mantidos e movidos para `lixo/`, e quantos conflitos ainda serão perguntados.
 3. Se a operação for mover uma parte grande do destino para `lixo/` (20% ou mais dos arquivos, com mínimo de 10, ou 1.000 arquivos ou mais), a janela exibe um alerta vermelho e só libera o botão depois que você marcar a confirmação. Isso costuma indicar destino escolhido errado.
 4. Acompanhe a tela de execução. Ao final, a tela de resultado mostra o balanço. Itens com falha podem ser reprocessados em **Tentar de novo**.
-5. **Exportar relatório CSV** gera o relatório da análise e do resultado (UTF-8, separado por ponto e vírgula, abre direto no Excel).
+5. **Exportar relatório CSV** gera o relatório da análise e do resultado (UTF-8, separado por ponto e vírgula, abre direto no Excel). O cabeçalho usa nomes ASCII (`caminho_relativo`, `acao`, `acao_codigo`, `decisao`, `decisao_codigo`…); as colunas `*_na_analise` mostram o destino como estava antes da sincronização.
 
 ---
 
@@ -116,12 +116,12 @@ Conflitos ainda em **Perguntar na hora** abrem uma janela comparativa com tamanh
 
 ## 6. Restaurando Arquivos das Pastas `lixo/` e `old/`
 
-- **Restaurar de lixo/** (barra lateral): abre a lista dos arquivos em `<Destino>/lixo/` do par ativo, com seleção individual. Os marcados voltam ao local original.
+- **Restaurar de lixo/** (barra lateral): abre a lista dos arquivos em `<Destino>/lixo/` da tarefa ativa, com seleção individual. O resultado aparece em uma janela de aviso. Os marcados voltam ao local original.
   - Se o local original já estiver ocupado, o arquivo **permanece em `lixo/`** e é contado como "mantido". Nada é sobrescrito nem excluído.
   - Arquivos que receberam sufixo de data em `lixo/` (ex.: `foto_20261028_114500.jpg`) voltam com o nome original quando ele está livre.
   - Só pastas que ficaram vazias são removidas de `lixo/`.
   - Depois da restauração, faça uma nova análise.
-- **Abrir lixo/** e **Abrir old/**: abrem as pastas no gerenciador de arquivos. Em `old/`, versões substituídas várias vezes são preservadas com data e hora no nome (ex.: `relatorio_20261028_114500.xlsx`).
+- **Abrir lixo/** e **Abrir old/**: abrem as pastas no gerenciador de arquivos. Em `old/`, a versão substituída mantém o nome; data e hora só entram no nome quando já existe um arquivo igual em `old/` (ex.: `relatorio_20261028_114500.xlsx`).
 
 ---
 
@@ -148,7 +148,7 @@ Falhas transitórias de E/S são repetidas até 3 vezes, com espera progressiva.
 **3. Onde ficam os registros?**
 - Log completo de cada dia: `omnisync-AAAAMMDD.log` na pasta de logs (botão **Logs**).
 - Falhas inesperadas: `crash.log`.
-- Pasta de dados: `%LOCALAPPDATA%\OmniSync` no Windows; `~/.local/share/OmniSync` no Linux. Os pares salvos ficam em `settings.json` na mesma pasta. Ao abrir a versão 1.2 pela primeira vez, as pastas e opções da versão anterior viram um par salvo.
+- Pasta de dados: `%LOCALAPPDATA%\OmniSync` no Windows; `~/.local/share/OmniSync` no Linux. As tarefas salvas ficam em `settings.json` na mesma pasta. Ao abrir a versão 1.2 pela primeira vez, as pastas e opções da versão anterior viram uma tarefa salva. Destinos gravados com a subpasta da origem por versões anteriores são corrigidos para a pasta escolhida.
 
 **4. Todos os arquivos de um pendrive aparecem como conflito depois da mudança de horário.**
 Ative **Tolerar 1 h (horário de verão)**. Mídias FAT/exFAT gravam hora local e mudam 1 hora quando o fuso muda.

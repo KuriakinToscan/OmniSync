@@ -71,7 +71,7 @@ O [`MainViewModel`](../ViewModels/MainViewModel.cs) não referencia classes de j
 - `AskConflictResolutionAsync`: modal [`ConflictDialogWindow`](../Views/ConflictDialogWindow.axaml.cs).
 - `ConfirmSyncAsync`: janela [`ConfirmSyncWindow`](../Views/ConfirmSyncWindow.axaml) com o resumo do plano.
 - `SelectTrashEntriesAsync`: janela [`RestoreWindow`](../Views/RestoreWindow.axaml) de restauração seletiva.
-- `ConfirmAsync`: diálogo simples [`MessageDialog`](../Views/MessageDialog.cs) (ex.: remover um par salvo).
+- `ConfirmAsync`: diálogo simples [`MessageDialog`](../Views/MessageDialog.cs) (ex.: excluir uma tarefa salva); `NotifyAsync`: aviso simples (`MessageDialog.InformAsync`).
 
 O [`SyncEngine`](../Services/SyncEngine.cs) e o [`RestoreService`](../Services/RestoreService.cs) **não dependem do Avalonia**. O motor publica o estado de cada item por `IProgress<SyncItemUpdate>`; o ViewModel entrega essas atualizações à thread de UI em lote ([`UiBatchQueue`](../ViewModels/UiBatchQueue.cs), a cada 150 ms). Sem canal, o motor aplica o estado diretamente (uso headless e testes).
 
@@ -85,7 +85,11 @@ A janela principal tem quatro telas sobrepostas, cada uma visível por uma propr
 | Execução (`IsRunScreen`) | `IsRunningSync` |
 | Resultado (`IsResultScreen`) | `IsShowingResult` após uma execução |
 
-- **Pares salvos**: `Profiles` (`ProfileItemViewModel` sobre [`SyncProfile`](../Models/SyncProfile.cs)) e `SelectedProfile`. Trocar de par copia a configuração para os campos da tela sem disparar a invalidação e descarta o plano. Cada alteração de caminho ou opção é gravada de volta no par ativo; o arquivo é salvo na análise, no fim da execução, ao criar/remover pares e ao fechar a janela.
+- **Tarefas salvas** (no código, *profiles*): `Profiles` (`ProfileItemViewModel` sobre [`SyncProfile`](../Models/SyncProfile.cs)) e `SelectedProfile`. Trocar de tarefa copia a configuração para os campos da tela sem disparar a invalidação e descarta o plano. Cada alteração de caminho ou opção é gravada de volta na tarefa ativa; o arquivo é salvo na análise, no fim da execução, ao criar/remover tarefas e ao fechar a janela.
+- **Decisões mantidas** ([`DecisionMemory`](../ViewModels/DecisionMemory.cs)): ao descartar o plano, as decisões de conflito são guardadas com tamanho e data dos dois lados; a análise seguinte da mesma origem/destino efetivo as reaplica só se nada mudou. **Alterar** não descarta o plano (`IsEditingSetup` + **Voltar ao plano**).
+- **Destino efetivo**: o campo guarda a pasta escolhida; `PathHelper.ResolveEffectiveDestination` acrescenta a subpasta da origem. `SettingsService.StripSourceFolderFromDestination` migra destinos antigos que já tinham a subpasta gravada. `PathHelper.DescribePairProblem` aponta pastas iguais ou aninhadas antes da análise.
+- **Busca e ordem**: [`TextSearch`](../Services/TextMatching.cs) compara sem acentos nem maiúsculas (decomposição FormD); `NaturalStringComparer` ordena números pelo valor.
+- **Erros**: [`ErrorMessages`](../Services/ErrorMessages.cs) traduz códigos Win32 (HRESULT 0x8007xxxx) e errno para português; `ForLog` mantém a mensagem original no log.
 - **Árvore de pastas**: [`FolderTreeBuilder`](../ViewModels/FolderTree.cs) agrega alterações (não idênticos) e conflitos por pasta. A pasta selecionada filtra a lista junto com a categoria e a busca; o caminho exibido (`SyncItem.DisplayPath`) passa a ser relativo a ela.
 - **Decisões**: o painel de detalhes edita `SyncItem.Resolution` por três `RadioButton` (`IsResolutionReplace/Ignore/Ask`). O `MainViewModel` observa os conflitos e recalcula os contadores da barra inferior.
 - **Execução**: contadores por fase são atualizados em `ApplyItemUpdates`, no mesmo lote que já entrega o status dos itens. Se o motor não devolver `SyncResult` (cancelamento ou erro), o balanço é reconstruído a partir do estado dos itens.
@@ -187,7 +191,7 @@ Até 3 tentativas com espera de 1 s × tentativa, **apenas para `IOException` tr
 
 ### 4.8. Persistência e diagnóstico
 Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou `~/.local/share/OmniSync` (Linux).
-- `settings.json`: pares salvos (`Profiles`) e par ativo (`ActiveProfileId`), com gravação atômica. O formato 1.1 (um par em campos soltos) é migrado na leitura por `SettingsService.Normalize`, que também corrige ids repetidos, nomes vazios e par ativo inexistente.
+- `settings.json`: tarefas salvas (`Profiles`) e tarefa ativa (`ActiveProfileId`), com gravação atômica. O formato 1.1 (uma tarefa em campos soltos) é migrado na leitura por `SettingsService.Normalize`, que também corrige ids repetidos, nomes vazios, tarefa ativa inexistente e destinos com a subpasta da origem já gravada.
 - `logs/omnisync-AAAAMMDD.log`: log completo de todas as operações.
 - `crash.log` e `selftest.log`.
 
@@ -198,8 +202,11 @@ Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou
 1. **[`Tests/SyncEngineTests.cs`](../Tests/SyncEngineTests.cs)**: classificação (novo, idêntico, órfão, conflito, SHA-256), pastas reservadas, aninhamento, nomes reservados na origem, caixa no Linux, exclusões, tolerância de horário de verão, cópia e reanálise idêntica, não sobrescrita após a análise, cancelamento sem arquivo parcial, substituição segura quando a cópia falha, órfão já removido, poda de pastas vazias e canal de atualização de itens.
 2. **[`Tests/RestoreServiceTests.cs`](../Tests/RestoreServiceTests.cs)**: restauração simples, manutenção em `lixo/` quando o destino está ocupado, isolamento da `lixo/` da pasta pai, remoção do sufixo de data, preservação de `lixo/` não vazia, recusa de entradas externas e restauração seletiva.
 3. **[`Tests/ModelTests.cs`](../Tests/ModelTests.cs)**: direção do conflito, mapeamento da decisão na grade, critério de remoção em massa e severidade do log.
-4. **[`Tests/ProfileAndLayoutTests.cs`](../Tests/ProfileAndLayoutTests.cs)**: migração do `settings.json` 1.1, gravação e leitura dos pares, JSON inválido, normalização, nome sugerido, estado do par na barra lateral, árvore de pastas, barra proporcional e texto da ação na lista.
-5. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
+4. **[`Tests/ProfileAndLayoutTests.cs`](../Tests/ProfileAndLayoutTests.cs)**: migração do `settings.json` 1.1, gravação e leitura das tarefas, JSON inválido, normalização, nome sugerido, estado da tarefa na barra lateral, árvore de pastas, barra proporcional e texto da ação na lista.
+5. **[`Tests/SafeDecisionTests.cs`](../Tests/SafeDecisionTests.cs)**: decisões mantidas entre análises, migração do destino com subpasta gravada, destino efetivo, pastas iguais/aninhadas e confirmação das substituições de versões mais novas.
+6. **[`Tests/InterfaceTests.cs`](../Tests/InterfaceTests.cs)**: busca sem acentos, ordem natural, tempos em ms, percentual limitado a 99% e concordância no resultado da restauração.
+7. **[`Tests/ReportAndErrorTests.cs`](../Tests/ReportAndErrorTests.cs)**: tradução de códigos Win32/errno e formato do CSV.
+8. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
 
 ---
 
