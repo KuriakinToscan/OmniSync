@@ -48,6 +48,32 @@ jobs:
           Get-Content $log
           if (-not (Select-String -Path $log -Pattern 'SELF_TEST_OK' -Quiet)) { throw 'Autoteste falhou' }
 
+      - name: Modo de linha de comando do executável Windows publicado
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $exe = (Resolve-Path smoke/OmniSync.exe).Path
+          $out = & $exe --ajuda | Out-String
+          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'sincronizar') { Write-Output $out; throw "--ajuda falhou ($LASTEXITCODE)" }
+
+          $root = Join-Path $env:RUNNER_TEMP 'cli'
+          New-Item -ItemType Directory -Force "$root/Origem/Volume", "$root/Backup" | Out-Null
+          Set-Content "$root/Origem/Volume/novo.txt" 'novo'
+          $settings = @{ Profiles = @(@{ Name = 'Volume'; SourcePath = "$root/Origem/Volume"; DestinationPath = "$root/Backup"; UseSourceFolderNameInDestination = $true }) } | ConvertTo-Json -Depth 4
+          New-Item -ItemType Directory -Force (Join-Path $env:LOCALAPPDATA 'OmniSync') | Out-Null
+          Set-Content (Join-Path $env:LOCALAPPDATA 'OmniSync/settings.json') $settings -Encoding utf8
+
+          $out = & $exe --sincronizar 'Inexistente' | Out-String
+          Write-Output $out
+          if ($LASTEXITCODE -ne 3) { throw "Tarefa inexistente deveria sair com 3, saiu com $LASTEXITCODE" }
+
+          $out = & $exe --sincronizar 'volume' | Out-String
+          Write-Output $out
+          if ($LASTEXITCODE -ne 0) { throw "Sincronização pela linha de comando saiu com $LASTEXITCODE" }
+          if (-not (Test-Path "$root/Backup/Volume/novo.txt")) { throw 'Arquivo não foi copiado pela linha de comando' }
+          if ($out -notmatch 'Idênticos') { Write-Warning 'Acentos da saída não conferem com a página de código do console' }
+
       - name: Publicar executável Linux (linux-x64)
         if: matrix.os == 'ubuntu-latest'
         run: dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish/linux-x64
@@ -59,6 +85,17 @@ jobs:
           timeout 120 xvfb-run -a smoke/OmniSync --self-test
           grep SELF_TEST ~/.local/share/OmniSync/selftest.log
           grep -q SELF_TEST_OK ~/.local/share/OmniSync/selftest.log
+
+      - name: Modo de linha de comando do executável Linux publicado
+        if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 5
+        run: |
+          smoke/OmniSync --ajuda | grep -q sincronizar
+          set +e
+          smoke/OmniSync --sincronizar Inexistente
+          code=$?
+          set -e
+          test "$code" -eq 3
 
       - name: Upload de artefato Windows
         if: matrix.os == 'windows-latest'

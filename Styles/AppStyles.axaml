@@ -264,7 +264,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource OsAccentBrush}" />
     </Style>
 
-    <!-- Campo de nome do par no cabeçalho -->
+    <!-- Campo de nome da tarefa no cabeçalho -->
     <Style Selector="TextBox.inline-edit">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -278,7 +278,7 @@
         <Setter Property="BorderThickness" Value="0" />
     </Style>
 
-    <!-- Barra lateral de pares -->
+    <!-- Barra lateral de tarefas -->
     <Style Selector="ListBox.profiles">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Padding" Value="0" />

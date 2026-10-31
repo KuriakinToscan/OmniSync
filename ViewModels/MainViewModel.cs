@@ -16,7 +16,7 @@ namespace OmniSync.ViewModels;
 
 /// <summary>
 /// ViewModel principal da aplicação OmniSync.
-/// Coordena os pares de sincronização salvos, a varredura diferencial (Dry-Run), a navegação pelo plano
+/// Coordena as tarefas de sincronização salvas, a varredura diferencial (Dry-Run), a navegação pelo plano
 /// (árvore de pastas, filtros, painel de detalhes), a confirmação e execução da sincronização, a tela de
 /// resultado e a restauração de arquivos da pasta <c>lixo/</c>.
 /// </summary>
@@ -90,28 +90,28 @@ public partial class MainViewModel : ViewModelBase
     public Func<IReadOnlyList<TrashEntry>, Task<IReadOnlyList<TrashEntry>?>>? SelectTrashEntriesAsync { get; set; }
 
     // ------------------------------------------------------------------
-    // Pares salvos
+    // Tarefas salvas
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Pares de sincronização salvos, exibidos na barra lateral.
+    /// Tarefas de sincronização salvas, exibidas na barra lateral.
     /// </summary>
     public ObservableCollection<ProfileItemViewModel> Profiles { get; } = new();
 
     /// <summary>
-    /// Par ativo. Trocar de par descarta o plano carregado.
+    /// Tarefa ativa. Trocar de tarefa descarta o plano carregado.
     /// </summary>
     [ObservableProperty]
     private ProfileItemViewModel? _selectedProfile;
 
     /// <summary>
-    /// Nome do par ativo (editável no cabeçalho).
+    /// Nome da tarefa ativa (editável no cabeçalho).
     /// </summary>
     [ObservableProperty]
     private string _profileName = string.Empty;
 
     // ------------------------------------------------------------------
-    // Configuração do par ativo
+    // Configuração da tarefa ativa
     // ------------------------------------------------------------------
 
     /// <summary>
@@ -409,7 +409,7 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public bool HasItems => Items.Count > 0;
 
-    /// <summary>Tela de configuração do par (sem plano carregado, ou editando com o plano guardado).</summary>
+    /// <summary>Tela de configuração da tarefa (sem plano carregado, ou editando com o plano guardado).</summary>
     public bool IsSetupScreen => !IsRunningSync && !IsShowingResult && (Items.Count == 0 || IsEditingSetup);
 
     /// <summary>Tela do plano analisado.</summary>
@@ -554,7 +554,7 @@ public partial class MainViewModel : ViewModelBase
     public bool CanEditConflicts => !IsBusy && ConflictCount > 0;
 
     /// <summary>
-    /// Indica se é possível trocar de par, criar ou remover pares.
+    /// Indica se é possível trocar de tarefa, criar ou remover tarefas.
     /// </summary>
     public bool CanManageProfiles => !IsBusy;
 
@@ -577,7 +577,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Chips com as opções ativas do par, exibidos no plano.</summary>
+    /// <summary>Chips com as opções ativas da tarefa, exibidos no plano.</summary>
     public IReadOnlyList<string> ActiveOptionChips
     {
         get
@@ -664,7 +664,7 @@ public partial class MainViewModel : ViewModelBase
     /// Deve ser instanciado na thread de UI.
     /// </summary>
     /// <param name="syncEngine">Instância do motor de sincronização.</param>
-    /// <param name="loadSettings">Se <c>true</c>, restaura e passa a gravar os pares salvos (desative em testes automatizados).</param>
+    /// <param name="loadSettings">Se <c>true</c>, restaura e passa a gravar as tarefas salvas (desative em testes automatizados).</param>
     public MainViewModel(ISyncEngine syncEngine, bool loadSettings = true)
     {
         _syncEngine = syncEngine;
@@ -708,11 +708,11 @@ public partial class MainViewModel : ViewModelBase
     }
 
     // ------------------------------------------------------------------
-    // Persistência e pares
+    // Persistência e tarefas
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Grava os pares salvos e o par ativo.
+    /// Grava as tarefas salvas e a tarefa ativa.
     /// </summary>
     public void SaveSettings()
     {
@@ -727,7 +727,7 @@ public partial class MainViewModel : ViewModelBase
         new(new SyncProfile { Name = SyncProfile.DefaultName, ExcludePatterns = SettingsService.DefaultExcludePatterns });
 
     /// <summary>
-    /// Copia a configuração atual da tela para o par ativo.
+    /// Copia a configuração atual da tela para a tarefa ativa.
     /// </summary>
     private void WriteBackToProfile()
     {
@@ -785,7 +785,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Cria um par vazio e o seleciona.
+    /// Cria uma tarefa vazia e a seleciona.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanManageProfiles))]
     private void NewProfile()
@@ -797,9 +797,9 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Remove um par salvo (só a configuração; nenhum arquivo é tocado), após confirmação.
+    /// Remove uma tarefa salva (só a configuração; nenhum arquivo é tocado), após confirmação.
     /// </summary>
-    /// <param name="item">Par a remover; quando nulo, o par ativo.</param>
+    /// <param name="item">Tarefa a remover; quando nula, a tarefa ativa.</param>
     [RelayCommand(CanExecute = nameof(CanManageProfiles))]
     private async Task DeleteProfileAsync(ProfileItemViewModel? item)
     {
@@ -900,7 +900,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Atualiza o destino efetivo e o aviso de par inválido exibidos na configuração.
+    /// Atualiza o destino efetivo e o aviso de origem/destino inválidos exibidos na configuração.
     /// </summary>
     private void NotifyDestination()
     {
@@ -1172,7 +1172,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Volta para a tela de configuração do par sem descartar o plano: ele só é descartado se algum caminho ou
+    /// Volta para a tela de configuração da tarefa sem descartar o plano: ele só é descartado se algum caminho ou
     /// opção mudar, e as decisões de conflito já tomadas são reaplicadas na próxima análise.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanManageProfiles))]
@@ -1202,9 +1202,7 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private IReadOnlyList<string> ParseExcludePatterns()
     {
-        return (ExcludePatternsText ?? string.Empty)
-            .Split(new[] { ';', ',', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToArray();
+        return ScanOptions.ParsePatterns(ExcludePatternsText);
     }
 
     // ------------------------------------------------------------------

@@ -26,6 +26,15 @@ public sealed class ScanOptions
     /// nos dois lados (ex.: <c>Thumbs.db</c>, <c>~$*</c>).
     /// </summary>
     public IReadOnlyList<string> ExcludePatterns { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Converte o texto de exclusões de uma tarefa (separado por ponto e vírgula, vírgula ou quebra de linha)
+    /// em lista de padrões.
+    /// </summary>
+    /// <param name="text">Texto digitado pelo usuário.</param>
+    public static IReadOnlyList<string> ParsePatterns(string? text) =>
+        (text ?? string.Empty)
+            .Split(new[] { ';', ',', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
 /// <summary>

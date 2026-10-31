@@ -1,0 +1,383 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using OmniSync.Models;
+using OmniSync.Services;
+
+namespace OmniSync.Cli;
+
+/// <summary>
+/// Executa os comandos de linha de comando sobre as tarefas salvas, sem interface e sem perguntas.
+/// Conflitos sem decisão seguem a <see cref="CliConflictPolicy"/>; remoção em massa aborta antes de alterar o destino.
+/// Toda linha do motor vai para o log diário; o console recebe o resumo, avisos e erros.
+/// </summary>
+public sealed class CliRunner
+{
+    private static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(5);
+
+    private readonly ISyncEngine _engine;
+    private readonly TextWriter _output;
+    private readonly string _settingsPath;
+
+    /// <summary>
+    /// Cria o executor.
+    /// </summary>
+    /// <param name="engine">Motor de sincronização.</param>
+    /// <param name="output">Saída de texto (console ou, nos testes, um <see cref="StringWriter"/>).</param>
+    /// <param name="settingsPath">Arquivo de configurações com as tarefas salvas.</param>
+    public CliRunner(ISyncEngine engine, TextWriter output, string settingsPath)
+    {
+        _engine = engine;
+        _output = TextWriter.Synchronized(output);
+        _settingsPath = settingsPath;
+    }
+
+    /// <summary>
+    /// Executa o comando.
+    /// </summary>
+    /// <param name="command">Comando interpretado.</param>
+    /// <param name="cancellationToken">Cancelamento (Ctrl+C).</param>
+    /// <returns>Código de saída do processo.</returns>
+    public async Task<CliExitCode> RunAsync(CliCommand command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (command.Action)
+            {
+                case CliAction.Help:
+                    _output.WriteLine(CliCommand.HelpText);
+                    return CliExitCode.Success;
+                case CliAction.List:
+                    return ListTasks();
+                default:
+                    return await AnalyzeOrRunAsync(command, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Report("Interrompido. Nenhum arquivo parcial ficou no destino.", alwaysShow: true);
+            return CliExitCode.Cancelled;
+        }
+        catch (Exception ex)
+        {
+            Report($"[ERRO CRÍTICO] {ErrorMessages.ForLog(ex)}", alwaysShow: true);
+            return CliExitCode.UnexpectedError;
+        }
+    }
+
+    private CliExitCode ListTasks()
+    {
+        var settings = SettingsService.Load(_settingsPath);
+        if (settings.Profiles.Count == 0)
+        {
+            _output.WriteLine("Nenhuma tarefa salva. Crie uma pela interface.");
+            return CliExitCode.Success;
+        }
+
+        _output.WriteLine(PtText.Count(settings.Profiles.Count, "tarefa salva:", "tarefas salvas:"));
+        foreach (var p in settings.Profiles)
+        {
+            var dest = PathHelper.ResolveEffectiveDestination(p.SourcePath, p.DestinationPath, p.UseSourceFolderNameInDestination);
+            _output.WriteLine();
+            _output.WriteLine($"  {p.Name}");
+            _output.WriteLine($"    Origem:  {p.SourcePath}");
+            _output.WriteLine($"    Destino: {dest}");
+            _output.WriteLine($"    Última:  {DescribeLastRun(p)}");
+        }
+        return CliExitCode.Success;
+    }
+
+    private async Task<CliExitCode> AnalyzeOrRunAsync(CliCommand command, CancellationToken cancellationToken)
+    {
+        var settings = SettingsService.Load(_settingsPath);
+        var profile = FindProfile(settings.Profiles, command.TaskName!, out var lookupError);
+        if (profile == null)
+        {
+            _output.WriteLine(lookupError);
+            return CliExitCode.InvalidInput;
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.SourcePath) || string.IsNullOrWhiteSpace(profile.DestinationPath))
+        {
+            _output.WriteLine($"A tarefa \"{profile.Name}\" não tem origem e destino definidos. Complete-a pela interface.");
+            return CliExitCode.InvalidInput;
+        }
+
+        var source = profile.SourcePath.Trim();
+        var dest = PathHelper.ResolveEffectiveDestination(source, profile.DestinationPath, profile.UseSourceFolderNameInDestination);
+        var problem = PathHelper.DescribePairProblem(source, dest);
+        if (problem != null)
+        {
+            _output.WriteLine(problem);
+            return CliExitCode.InvalidInput;
+        }
+        if (!Directory.Exists(source))
+        {
+            _output.WriteLine($"A origem não existe ou não está acessível: {source}");
+            return CliExitCode.InvalidInput;
+        }
+
+        bool run = command.Action == CliAction.Run;
+        Report($"[CLI] {(run ? "Sincronizando" : "Analisando")} a tarefa \"{profile.Name}\": {source} → {dest}", alwaysShow: true);
+
+        var logger = new CliLogger(this, command.Verbose);
+        var options = new ScanOptions
+        {
+            UseDeepHash = profile.EnableDeepHashCheck,
+            TolerateDstShift = profile.TolerateDstShift,
+            ExcludePatterns = ScanOptions.ParsePatterns(profile.ExcludePatterns)
+        };
+        var scan = await _engine.ScanDirectoriesAsync(source, dest, options, logger, cancellationToken);
+        var items = scan.Items;
+        foreach (var warning in scan.Warnings)
+        {
+            Report($"Aviso: {warning}", alwaysShow: true);
+        }
+
+        int replaceCount = ApplyConflictPolicy(items, command.ConflictPolicy);
+        WritePlanSummary(items, replaceCount, command.ConflictPolicy);
+
+        if (!run)
+        {
+            return await WriteReportAsync(command.ReportPath, items) ? CliExitCode.Success : CliExitCode.Failures;
+        }
+
+        int orphans = items.Count(i => i.IsOrphan);
+        if (SyncSafety.IsMassOrphan(orphans, scan.DestinationFileCount))
+        {
+            Report($"[ERRO] Sincronização abortada: {PtText.Count(orphans, "arquivo iria", "arquivos iriam")} para lixo/ " +
+                   $"de {scan.DestinationFileCount:N0} no destino (remoção em massa). Nada foi alterado. " +
+                   "Confira o destino da tarefa e, se estiver certo, sincronize pela interface.", alwaysShow: true);
+            await WriteReportAsync(command.ReportPath, items);
+            return CliExitCode.MassRemovalAborted;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        SyncResult? result = null;
+        bool cancelled = false;
+        try
+        {
+            result = await _engine.ExecuteSyncAsync(
+                items,
+                dest,
+                _ => Task.FromResult(ConflictResolution.Ignore),
+                null,
+                new CliProgress(this),
+                logger,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+        stopwatch.Stop();
+
+        RecordRun(profile.Id, result, cancelled);
+        bool reportOk = await WriteReportAsync(command.ReportPath, items);
+
+        if (cancelled)
+        {
+            Report("Interrompido. Nenhum arquivo parcial ficou no destino.", alwaysShow: true);
+            return CliExitCode.Cancelled;
+        }
+
+        _output.WriteLine();
+        _output.WriteLine($"Resultado em {SyncEngine.FormatElapsed(stopwatch.Elapsed)}: {result!.Summary}.");
+        foreach (var failed in result.FailedItems.Take(20))
+        {
+            _output.WriteLine($"  Falhou: {failed.RelativePath} ({failed.StatusMessage})");
+        }
+        if (result.Failed > 20)
+        {
+            _output.WriteLine($"  … e mais {result.Failed - 20:N0} (detalhes no log).");
+        }
+        _output.WriteLine($"Log: {FileLogService.CurrentLogFile}");
+
+        return result.HasFailures || !reportOk ? CliExitCode.Failures : CliExitCode.Success;
+    }
+
+    /// <summary>
+    /// Define a decisão dos conflitos ainda sem decisão, já que não há ninguém para perguntar.
+    /// </summary>
+    /// <param name="items">Itens da análise.</param>
+    /// <param name="policy">Política escolhida.</param>
+    /// <returns>Quantidade de conflitos que serão substituídos.</returns>
+    public static int ApplyConflictPolicy(IEnumerable<SyncItem> items, CliConflictPolicy policy)
+    {
+        int replace = 0;
+        foreach (var item in items.Where(i => i.IsConflict && i.Resolution == ConflictResolution.AskUser))
+        {
+            bool replaceIt = policy == CliConflictPolicy.ReplaceWhenSourceNewer &&
+                             item.ConflictDirection == ConflictDirection.SourceNewer;
+            item.Resolution = replaceIt ? ConflictResolution.Replace : ConflictResolution.Ignore;
+            if (replaceIt) replace++;
+        }
+        return replace;
+    }
+
+    /// <summary>
+    /// Encontra a tarefa pelo nome (ignorando maiúsculas e acentos) ou pelo identificador.
+    /// </summary>
+    /// <param name="profiles">Tarefas salvas.</param>
+    /// <param name="query">Nome ou identificador informado.</param>
+    /// <param name="error">Mensagem quando nenhuma ou mais de uma tarefa corresponde.</param>
+    /// <returns>A tarefa encontrada, ou <c>null</c>.</returns>
+    public static SyncProfile? FindProfile(IReadOnlyList<SyncProfile> profiles, string query, out string? error)
+    {
+        error = null;
+        var trimmed = query.Trim();
+        if (Guid.TryParse(trimmed, out var id))
+        {
+            var byId = profiles.FirstOrDefault(p => p.Id == id);
+            if (byId != null) return byId;
+        }
+
+        var matches = profiles.Where(p => string.Equals(p.Name, trimmed, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (matches.Count == 0)
+        {
+            var folded = TextSearch.Fold(trimmed);
+            matches = profiles.Where(p => TextSearch.Fold(p.Name) == folded).ToList();
+        }
+
+        if (matches.Count == 1) return matches[0];
+
+        if (matches.Count == 0)
+        {
+            error = profiles.Count == 0
+                ? $"Tarefa \"{trimmed}\" não encontrada: não há tarefas salvas. Crie uma pela interface."
+                : $"Tarefa \"{trimmed}\" não encontrada. Tarefas salvas: {string.Join(", ", profiles.Select(p => $"\"{p.Name}\""))}.";
+        }
+        else
+        {
+            error = $"Há {matches.Count} tarefas chamadas \"{trimmed}\". Renomeie uma delas pela interface ou use o identificador: " +
+                    string.Join(", ", matches.Select(p => p.Id.ToString())) + ".";
+        }
+        return null;
+    }
+
+    private void WritePlanSummary(IReadOnlyList<SyncItem> items, int replaceCount, CliConflictPolicy policy)
+    {
+        var news = items.Where(i => i.IsNew).ToList();
+        var conflicts = items.Where(i => i.IsConflict).ToList();
+        int orphans = items.Count(i => i.IsOrphan);
+        int identical = items.Count(i => i.IsIdentical);
+
+        _output.WriteLine();
+        _output.WriteLine("Plano:");
+        _output.WriteLine($"  Novos:      {news.Count,8:N0}  ({SyncItem.FormatBytes(news.Sum(i => i.SourceSize))})");
+        _output.WriteLine($"  Conflitos:  {conflicts.Count,8:N0}  ({PtText.Count(replaceCount, "substituído", "substituídos")}, " +
+                          $"{PtText.Count(conflicts.Count - replaceCount, "mantido", "mantidos")} no destino; " +
+                          $"política: {(policy == CliConflictPolicy.Keep ? "manter" : "origem-mais-nova")})");
+        _output.WriteLine($"  Para lixo/: {orphans,8:N0}");
+        _output.WriteLine($"  Idênticos:  {identical,8:N0}");
+    }
+
+    private async Task<bool> WriteReportAsync(string? path, IEnumerable<SyncItem> items)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return true;
+        try
+        {
+            var full = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(full);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            await ReportExporter.WriteCsvAsync(full, items);
+            Report($"Relatório gravado em {full}", alwaysShow: true);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            Report($"[ERRO] Não foi possível gravar o relatório: {ErrorMessages.ForLog(ex)}", alwaysShow: true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Registra a execução na tarefa, relendo as configurações para não desfazer mudanças feitas pela interface.
+    /// </summary>
+    private void RecordRun(Guid profileId, SyncResult? result, bool cancelled)
+    {
+        var settings = SettingsService.Load(_settingsPath);
+        var profile = settings.Profiles.FirstOrDefault(p => p.Id == profileId);
+        if (profile == null) return;
+        profile.LastRunUtc = DateTime.UtcNow;
+        profile.LastOutcome = cancelled ? ProfileRunOutcome.Cancelled
+            : result?.HasFailures == true ? ProfileRunOutcome.Failures
+            : ProfileRunOutcome.Success;
+        profile.LastFailedCount = result?.Failed ?? 0;
+        SettingsService.Save(settings, _settingsPath);
+    }
+
+    private static string DescribeLastRun(SyncProfile p)
+    {
+        if (!p.LastRunUtc.HasValue || p.LastOutcome == ProfileRunOutcome.None) return "nunca sincronizada";
+        var when = p.LastRunUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+        return p.LastOutcome switch
+        {
+            ProfileRunOutcome.Success => $"{when}, sem falhas",
+            ProfileRunOutcome.Failures => $"{when}, {PtText.Count(p.LastFailedCount, "falha", "falhas")}",
+            ProfileRunOutcome.Cancelled => $"{when}, interrompida",
+            _ => when
+        };
+    }
+
+    /// <summary>
+    /// Grava a linha no log diário e, se for o caso, no console.
+    /// </summary>
+    private void Report(string message, bool alwaysShow)
+    {
+        FileLogService.Write(message);
+        if (alwaysShow)
+        {
+            _output.WriteLine(message);
+        }
+    }
+
+    /// <summary>
+    /// Registro do motor: tudo no log diário; no console, avisos e erros (ou tudo, com <c>--detalhado</c>).
+    /// </summary>
+    private sealed class CliLogger : IProgress<string>
+    {
+        private readonly CliRunner _runner;
+        private readonly bool _verbose;
+
+        public CliLogger(CliRunner runner, bool verbose)
+        {
+            _runner = runner;
+            _verbose = verbose;
+        }
+
+        public void Report(string value) => _runner.Report(value, _verbose || IsNotable(value));
+
+        private static bool IsNotable(string line) =>
+            line.StartsWith("[ERRO", StringComparison.Ordinal) ||
+            line.StartsWith("[AVISO", StringComparison.Ordinal) ||
+            line.StartsWith("Aviso", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Progresso no console a cada <see cref="ProgressInterval"/>, para execuções longas.
+    /// </summary>
+    private sealed class CliProgress : IProgress<SyncProgressReport>
+    {
+        private readonly CliRunner _runner;
+        private readonly Stopwatch _sinceLast = Stopwatch.StartNew();
+
+        public CliProgress(CliRunner runner) => _runner = runner;
+
+        public void Report(SyncProgressReport value)
+        {
+            lock (_sinceLast)
+            {
+                if (_sinceLast.Elapsed < ProgressInterval) return;
+                _sinceLast.Restart();
+            }
+            _runner._output.WriteLine(
+                $"  {Math.Min(value.OverallProgressPercent, 99):0}% · Arquivos: {value.ProcessedFiles:N0} de {value.TotalFiles:N0} · " +
+                $"Volume: {SyncItem.FormatBytes(value.ProcessedBytes)} de {SyncItem.FormatBytes(value.TotalBytes)}");
+        }
+    }
+}

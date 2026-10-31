@@ -200,6 +200,13 @@ Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou
 - `logs/omnisync-AAAAMMDD.log`: log completo de todas as operações.
 - `crash.log` e `selftest.log`.
 
+### 4.9. Modo de linha de comando (`Cli/`)
+`Program.Main` desvia para `RunCli` quando há qualquer argumento além de `--self-test`, antes de iniciar o Avalonia (nenhuma janela é criada).
+- `CliCommand`: interpreta `--listar`, `--analisar`, `--sincronizar`, `--ajuda` (com sinônimos em inglês) e as opções `--conflitos`, `--relatorio`, `--detalhado`; argumento desconhecido gera erro e código 3.
+- `CliRunner`: carrega `settings.json`, encontra a tarefa (nome sem caixa nem acentos, ou `Id`), resolve o destino efetivo com `PathHelper.ResolveEffectiveDestination`, recusa pares inválidos (`DescribePairProblem`), analisa com as opções da tarefa e aplica a política de conflitos (`ApplyConflictPolicy`: `Ignore` por padrão; `Replace` só com `origem-mais-nova` e `ConflictDirection.SourceNewer`). A proteção de remoção em massa (`SyncSafety.IsMassOrphan`, o mesmo critério da confirmação da interface) aborta antes de `ExecuteSyncAsync`. Ao fim, relê `settings.json` e grava só a última execução da tarefa.
+- `ConsoleHost`: o executável Windows é `WinExe`. Se a saída padrão já está redirecionada (pipe ou arquivo), escreve nela; senão, `AttachConsole(ATTACH_PARENT_PROCESS)`. A codificação segue `GetConsoleOutputCP` (ou `GetOEMCP` sem console), via `CodePagesEncodingProvider`, para os acentos saírem certos no console e no PowerShell. Sem console nem redirecionamento (Agendador de Tarefas), a saída é descartada e fica o log diário.
+- Códigos de saída: `CliExitCode` (0 sem falhas, 1 falhas, 2 remoção em massa, 3 entrada inválida, 4 interrompido, 5 erro inesperado).
+
 ---
 
 ## 5. Estrutura de Testes Automatizados
@@ -211,7 +218,8 @@ Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou
 5. **[`Tests/SafeDecisionTests.cs`](../Tests/SafeDecisionTests.cs)**: decisões mantidas entre análises, migração do destino com subpasta gravada, destino efetivo, pastas iguais/aninhadas e confirmação das substituições de versões mais novas.
 6. **[`Tests/InterfaceTests.cs`](../Tests/InterfaceTests.cs)**: busca sem acentos, ordem natural, tempos em ms, percentual limitado a 99% e concordância no resultado da restauração.
 7. **[`Tests/ReportAndErrorTests.cs`](../Tests/ReportAndErrorTests.cs)**: tradução de códigos Win32/errno e formato do CSV.
-8. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
+8. **[`Tests/CliTests.cs`](../Tests/CliTests.cs)**: argumentos (válidos e inválidos), busca da tarefa sem acentos e por id, política de conflitos (destino mais novo nunca é substituído), sincronização de ponta a ponta com CSV e registro da última execução, análise sem alterações, aborto por remoção em massa, tarefa inexistente e origem ausente.
+9. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
 
 ---
 
@@ -230,4 +238,4 @@ dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:
 ```
 
 ### Integração Contínua (GitHub Actions)
-O arquivo [`.github/workflows/ci-release.yml`](../.github/workflows/ci-release.yml) está configurado para compilar, testar e gerar automaticamente os artefatos `OmniSync-win-x64` e `OmniSync-linux-x64` a cada *push* ou *pull request* nas branches `main`/`master`.
+O arquivo [`.github/workflows/ci-release.yml`](../.github/workflows/ci-release.yml) está configurado para compilar, testar e gerar automaticamente os artefatos `OmniSync-win-x64` e `OmniSync-linux-x64` a cada *push* ou *pull request* nas branches `main`/`master`. Depois do autoteste, o executável publicado também é testado pela linha de comando: `--ajuda`, tarefa inexistente (código 3) e uma sincronização real (Windows), conferindo o código de saída e o arquivo copiado.

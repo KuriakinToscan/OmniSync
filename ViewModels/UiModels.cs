@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using OmniSync.Models;
+using OmniSync.Services;
 
 namespace OmniSync.ViewModels;
 
@@ -134,9 +135,7 @@ public sealed class SyncPlanSummary
     /// Indica remoção em massa: muitos órfãos em relação ao destino, sinal típico de destino escolhido errado.
     /// Critério: pelo menos 1.000 órfãos, ou pelo menos 10 órfãos representando 20% ou mais dos arquivos do destino.
     /// </summary>
-    public bool IsMassOrphan =>
-        OrphanCount >= 1000 ||
-        (OrphanCount >= 10 && DestinationFileCount > 0 && OrphanCount * 5 >= DestinationFileCount);
+    public bool IsMassOrphan => SyncSafety.IsMassOrphan(OrphanCount, DestinationFileCount);
 
     /// <summary>Percentual de arquivos do destino que serão movidos para <c>lixo/</c>.</summary>
     public double OrphanPercent => DestinationFileCount > 0 ? 100.0 * OrphanCount / DestinationFileCount : 0;

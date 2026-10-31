@@ -34,6 +34,18 @@ A janela segue o fluxo da sincronização em quatro telas:
 
 Em janelas com menos de 1.240 px de largura, a árvore de pastas é ocultada para preservar a lista e o painel de detalhes.
 
+### Linha de comando
+
+As tarefas salvas também rodam sem janela e sem perguntas, com código de saída para scripts e agendador:
+
+```powershell
+.\OmniSync.exe --listar | Out-Host
+.\OmniSync.exe --analisar "Volume" | Out-Host
+.\OmniSync.exe --sincronizar "Volume" --relatorio C:\Temp\volume.csv | Out-Host ; $LASTEXITCODE
+```
+
+Conflitos sem decisão mantêm o destino (ou, com `--conflitos origem-mais-nova`, só substituem quando a origem é mais nova) e remoção em massa aborta sem alterar nada. Detalhes no [manual](docs/MANUAL_DO_USUARIO.md#9-linha-de-comando-sem-janela).
+
 ---
 
 ## 📚 Documentação Completa
@@ -83,6 +95,7 @@ chmod +x publish/linux-x64/OmniSync
 ```text
 OmniSync/
 ├── Assets/                     # Ícone do aplicativo (PNG e ICO)
+├── Cli/                        # Modo de linha de comando (--listar, --analisar, --sincronizar)
 ├── Models/                     # Modelos de dados e enums de domínio
 │   ├── SyncActionType.cs       # Tipos de ação, resolução e direção do conflito
 │   ├── SyncContracts.cs        # Opções/resultado da varredura, atualizações de item, balanço, lixo/
@@ -97,6 +110,7 @@ OmniSync/
 │   ├── FileLogService.cs       # Log diário em arquivo
 │   ├── SettingsService.cs      # Tarefas salvas (JSON) e migração do formato 1.1
 │   ├── ReportExporter.cs       # Exportação CSV
+│   ├── SyncSafety.cs           # Critério de remoção em massa (interface e linha de comando)
 │   └── AppPaths.cs             # Pasta de dados por usuário
 ├── ViewModels/                 # Camada MVVM de apresentação e comandos
 │   ├── MainViewModel.cs        # Tarefas, telas, análise, confirmação, execução, filtros, restauração

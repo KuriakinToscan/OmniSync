@@ -5,7 +5,7 @@ using OmniSync.Models;
 namespace OmniSync.ViewModels;
 
 /// <summary>
-/// Estado exibido pelo ponto colorido de um par na barra lateral.
+/// Estado exibido pelo ponto colorido de uma tarefa na barra lateral.
 /// </summary>
 public enum ProfileStatusKind
 {
@@ -22,11 +22,11 @@ public enum ProfileStatusKind
 }
 
 /// <summary>
-/// Item da barra lateral "Pares salvos": envolve um <see cref="SyncProfile"/> e o estado de sessão do par.
+/// Item da barra lateral "Tarefas": envolve um <see cref="SyncProfile"/> e o estado de sessão da tarefa.
 /// </summary>
 public partial class ProfileItemViewModel : ObservableObject
 {
-    /// <summary>Par persistido.</summary>
+    /// <summary>Tarefa persistida.</summary>
     public SyncProfile Profile { get; }
 
     /// <summary>Nome exibido.</summary>
@@ -58,7 +58,7 @@ public partial class ProfileItemViewModel : ObservableObject
     public bool IsProblem => Status == ProfileStatusKind.Problem;
 
     /// <summary>
-    /// Cria o item a partir do par salvo.
+    /// Cria o item a partir da tarefa salva.
     /// </summary>
     public ProfileItemViewModel(SyncProfile profile)
     {

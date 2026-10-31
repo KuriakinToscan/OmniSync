@@ -74,7 +74,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Salva os pares e as preferências do usuário ao fechar a janela.
+    /// Salva as tarefas e as preferências do usuário ao fechar a janela.
     /// </summary>
     protected override void OnClosing(WindowClosingEventArgs e)
     {

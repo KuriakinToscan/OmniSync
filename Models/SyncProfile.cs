@@ -3,7 +3,7 @@ using System;
 namespace OmniSync.Models;
 
 /// <summary>
-/// Resultado da última execução registrada para um par de sincronização.
+/// Resultado da última execução registrada para uma tarefa de sincronização.
 /// </summary>
 public enum ProfileRunOutcome
 {
@@ -67,7 +67,7 @@ public sealed class SyncProfile
     public int LastFailedCount { get; set; }
 
     /// <summary>
-    /// Sugere um nome para o par a partir da pasta de origem (ex.: <c>D:\Fotos</c> → <c>Fotos</c>).
+    /// Sugere um nome para a tarefa a partir da pasta de origem (ex.: <c>D:\Fotos</c> → <c>Fotos</c>).
     /// </summary>
     /// <param name="sourcePath">Caminho da origem.</param>
     /// <returns>Nome sugerido, ou <see cref="DefaultName"/> quando a origem está vazia.</returns>
