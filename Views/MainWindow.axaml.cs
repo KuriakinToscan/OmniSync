@@ -30,6 +30,11 @@ public partial class MainWindow : Window
         InitializeComponent();
         // Ao voltar para a janela, traz as execuções feitas pelo agendador enquanto ela estava em segundo plano
         Activated += (_, _) => (DataContext as MainViewModel)?.RefreshRunsFromHistory();
+
+        // Enter confirma: nos caminhos, expande %USERPROFILE%; no horário, normaliza e salva o agendamento
+        SourcePathBox.AddHandler(KeyDownEvent, OnPathBoxKeyDown, RoutingStrategies.Tunnel);
+        DestinationPathBox.AddHandler(KeyDownEvent, OnPathBoxKeyDown, RoutingStrategies.Tunnel);
+        ScheduleTimeBox.AddHandler(KeyDownEvent, OnScheduleTimeKeyDown, RoutingStrategies.Tunnel);
     }
 
     /// <summary>
@@ -135,6 +140,24 @@ public partial class MainWindow : Window
     /// Ao sair do campo de origem ou destino, expande <c>%USERPROFILE%</c> e similares.
     /// </summary>
     private void OnPathBoxLostFocus(object? sender, RoutedEventArgs e) => (DataContext as MainViewModel)?.ExpandPaths();
+
+    private void OnPathBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter && e.Key != Key.Return) return;
+        (DataContext as MainViewModel)?.ExpandPaths();
+        e.Handled = true;
+    }
+
+    private void OnScheduleTimeKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter && e.Key != Key.Return || DataContext is not MainViewModel vm) return;
+        e.Handled = true;
+        vm.NormalizeScheduleTimeText();
+        if (vm.SaveScheduleCommand.CanExecute(null))
+        {
+            vm.SaveScheduleCommand.Execute(null);
+        }
+    }
 
     /// <summary>
     /// Ao sair do campo de horário, mostra o horário no formato HH:MM.

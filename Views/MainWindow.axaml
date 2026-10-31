@@ -181,7 +181,7 @@
                                     <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
                                              PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
                                              ToolTip.Tip="{Binding SourcePath}"
-                                             LostFocus="OnPathBoxLostFocus"
+                                             LostFocus="OnPathBoxLostFocus" x:Name="SourcePathBox"
                                              AutomationProperties.Name="Diretório de origem" />
                                 </DockPanel>
                             </Border>
@@ -203,7 +203,7 @@
                                         <TextBox Classes="mono" Text="{Binding DestinationPath}"
                                                  PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
                                                  ToolTip.Tip="{Binding DestinationPath}"
-                                                 LostFocus="OnPathBoxLostFocus"
+                                                 LostFocus="OnPathBoxLostFocus" x:Name="DestinationPathBox"
                                                  AutomationProperties.Name="Diretório de destino" />
                                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasEffectiveDestinationHint}">
                                             <TextBlock Classes="caption" Text="Sincroniza em" />
@@ -326,7 +326,7 @@
                                         <StackPanel Spacing="6" IsVisible="{Binding ScheduleHasTime}">
                                             <TextBlock Text="Horário" FontWeight="SemiBold" />
                                             <TextBox Text="{Binding ScheduleTimeText}" Width="110" Classes="mono" MaxLength="5"
-                                                     PlaceholderText="HH:MM" LostFocus="OnScheduleTimeLostFocus"
+                                                     PlaceholderText="HH:MM" LostFocus="OnScheduleTimeLostFocus" x:Name="ScheduleTimeBox"
                                                      ToolTip.Tip="Digite o horário: 18:30, 1830, 7h05 ou 7"
                                                      AutomationProperties.Name="Horário" />
                                             <TextBlock Text="Use HH:MM, de 00:00 a 23:59." Classes="caption danger-text"
