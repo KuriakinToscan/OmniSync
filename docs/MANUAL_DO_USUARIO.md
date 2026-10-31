@@ -13,6 +13,7 @@ Manual do **OmniSync**, sincronizador visual de arquivos para **Windows e Linux*
 6. [Restaurando Arquivos das Pastas `lixo/` e `old/`](#6-restaurando-arquivos-das-pastas-lixo-e-old)
 7. [Garantias de Segurança](#7-garantias-de-segurança)
 8. [Perguntas Frequentes e Solução de Problemas](#8-perguntas-frequentes-e-solução-de-problemas)
+9. [Linha de Comando (sem janela)](#9-linha-de-comando-sem-janela)
 
 ---
 
@@ -153,3 +154,45 @@ Falhas transitórias de E/S são repetidas até 3 vezes, com espera progressiva.
 
 **4. Todos os arquivos de um pendrive aparecem como conflito depois da mudança de horário.**
 Ative **Tolerar 1 h (horário de verão)**. Mídias FAT/exFAT gravam hora local e mudam 1 hora quando o fuso muda.
+
+---
+
+## 9. Linha de Comando (sem janela)
+
+As tarefas salvas na interface também podem ser analisadas e sincronizadas pelo terminal, sem abrir a janela e sem perguntas. É a base do agendamento.
+
+| Comando | O que faz |
+| --- | --- |
+| `OmniSync.exe --listar` | Lista as tarefas salvas, com origem, destino e última execução. |
+| `OmniSync.exe --analisar "Volume"` | Só analisa e mostra o plano (novos, conflitos, `lixo/`, idênticos). Não altera nada. |
+| `OmniSync.exe --sincronizar "Volume"` | Analisa e sincroniza. |
+| `OmniSync.exe --ajuda` | Mostra a ajuda. |
+
+O nome da tarefa não diferencia maiúsculas nem acentos (`"volume"` encontra `Volume`). Se houver duas tarefas com o mesmo nome, o comando é recusado e mostra os identificadores; use o identificador no lugar do nome.
+
+**Opções:**
+- `--conflitos manter` (padrão): mantém o arquivo do destino em todo conflito ainda sem decisão.
+- `--conflitos origem-mais-nova`: substitui só quando a origem é mais nova; a versão anterior vai para `old/`. Destino mais novo ou de mesmo horário é **sempre mantido** pela linha de comando.
+- `--relatorio C:\Temp\volume.csv`: grava o CSV do plano (ao analisar) ou do resultado (ao sincronizar).
+- `--detalhado`: mostra no console todas as linhas do registro, arquivo por arquivo. Sem ela aparecem o plano, o progresso a cada 5 s, avisos, erros e o resultado.
+
+**Segurança:** se a análise indicar remoção em massa (pelo menos 1.000 órfãos, ou 10 ou mais representando 20% do destino), a sincronização é **abortada sem alterar nada**. Confira o destino da tarefa e, se estiver certo, sincronize pela interface. Ctrl+C interrompe com segurança: nenhum arquivo parcial fica no destino.
+
+**Códigos de saída** (para scripts e agendador):
+
+| Código | Significado |
+| --- | --- |
+| 0 | Concluído sem falhas |
+| 1 | Concluído com falhas (ou relatório não gravado) |
+| 2 | Abortado por remoção em massa; nada foi alterado |
+| 3 | Argumento, tarefa ou caminho inválido; nada foi alterado |
+| 4 | Interrompido (Ctrl+C) |
+| 5 | Erro inesperado (detalhes no log) |
+
+**No PowerShell (Windows)**, acrescente `| Out-Host` para o terminal esperar o fim e mostrar a saída; o código fica em `$LASTEXITCODE`:
+
+```powershell
+.\OmniSync.exe --sincronizar "Volume" | Out-Host ; $LASTEXITCODE
+```
+
+Sem `| Out-Host` o comando funciona, mas o PowerShell volta ao prompt antes de o OmniSync terminar (o executável é um aplicativo de janela). Todas as linhas vão também para o log diário (`%LOCALAPPDATA%\OmniSync\logs`), e a execução aparece na barra lateral da interface como "Sincronizado hoje, HH:MM". Se a interface estiver aberta durante uma execução pela linha de comando, esse registro pode ser sobrescrito quando a interface salvar suas configurações.

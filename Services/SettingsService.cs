@@ -13,10 +13,10 @@ namespace OmniSync.Services;
 /// </summary>
 public sealed class AppSettings
 {
-    /// <summary>Pares de sincronização salvos.</summary>
+    /// <summary>Tarefas de sincronização salvas.</summary>
     public List<SyncProfile> Profiles { get; set; } = new();
 
-    /// <summary>Par selecionado na última sessão.</summary>
+    /// <summary>Tarefa selecionada na última sessão.</summary>
     public Guid? ActiveProfileId { get; set; }
 
     /// <summary>Último diretório de Origem (formato 1.1, migrado para <see cref="Profiles"/>).</summary>
@@ -89,8 +89,8 @@ public static class SettingsService
     }
 
     /// <summary>
-    /// Migra o formato 1.1 (um único par em campos soltos) para a lista de pares, descarta entradas
-    /// inválidas e garante que <see cref="AppSettings.ActiveProfileId"/> aponte para um par existente.
+    /// Migra o formato 1.1 (uma única tarefa em campos soltos) para a lista de tarefas, descarta entradas
+    /// inválidas e garante que <see cref="AppSettings.ActiveProfileId"/> aponte para uma tarefa existente.
     /// </summary>
     /// <param name="settings">Configurações lidas do disco.</param>
     /// <returns>A mesma instância, normalizada.</returns>

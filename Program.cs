@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using OmniSync.Cli;
 using OmniSync.Services;
 
 namespace OmniSync;
@@ -16,9 +18,13 @@ public sealed class Program
     /// Método de inicialização do processo. Deve ser executado em modo <see cref="STAThreadAttribute"/>
     /// para compatibilidade com diálogos nativos do Windows Shell (COM) e servidores gráficos Linux (X11/Wayland).
     /// </summary>
-    /// <param name="args">Argumentos de linha de comando (suporta <c>--self-test</c> para validação automatizada).</param>
+    /// <param name="args">
+    /// Argumentos de linha de comando: <c>--self-test</c> para validação automatizada, ou os comandos do modo
+    /// sem janela (<c>--listar</c>, <c>--analisar</c>, <c>--sincronizar</c>; ver <see cref="CliCommand"/>).
+    /// </param>
+    /// <returns>Código de saída (no modo de linha de comando, um <see cref="CliExitCode"/>).</returns>
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
         // Captura exceções fatais em threads de domínio para diagnóstico seguro em crash.log
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -33,16 +39,65 @@ public sealed class Program
             e.SetObserved();
         };
 
+        if (CliCommand.IsCliInvocation(args))
+        {
+            return RunCli(args);
+        }
+
         try
         {
-            BuildAvaloniaApp()
+            int exitCode = BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args);
             FileLogService.Close();
+            return exitCode;
         }
         catch (Exception ex)
         {
             LogCrash("Main Catch", ex);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Executa o modo de linha de comando, sem abrir a janela.
+    /// </summary>
+    /// <param name="args">Argumentos do processo.</param>
+    /// <returns>Código de saída.</returns>
+    private static int RunCli(string[] args)
+    {
+        var output = ConsoleHost.OpenOutput();
+        try
+        {
+            if (!CliCommand.TryParse(args, out var command, out var error))
+            {
+                output.WriteLine(error);
+                output.WriteLine("Use --ajuda para ver as opções.");
+                return (int)CliExitCode.InvalidInput;
+            }
+
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                // Primeiro Ctrl+C cancela com segurança; o processo termina sozinho em seguida
+                e.Cancel = true;
+                cts.Cancel();
+            };
+
+            var runner = new CliRunner(new SyncEngine(), output, AppPaths.SettingsFile);
+            var code = runner.RunAsync(command!, cts.Token).GetAwaiter().GetResult();
+            FileLogService.Write($"[CLI] Código de saída: {(int)code} ({code})");
+            return (int)code;
+        }
+        catch (Exception ex)
+        {
+            LogCrash("CLI", ex);
+            output.WriteLine($"Erro inesperado: {ex.Message}");
+            return (int)CliExitCode.UnexpectedError;
+        }
+        finally
+        {
+            output.Flush();
+            FileLogService.Close();
         }
     }
 
