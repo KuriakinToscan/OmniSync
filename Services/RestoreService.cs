@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using OmniSync.Models;
+using OmniSync.Services.FileSystems;
 
 namespace OmniSync.Services;
 
@@ -21,6 +22,17 @@ public sealed partial class RestoreService
     [GeneratedRegex(@"_\d{8}_\d{6}(_\d+)?$")]
     private static partial Regex CollisionSuffixRegex();
 
+    private readonly IFileSystem _fs;
+
+    /// <summary>
+    /// Cria o serviço sobre o sistema de arquivos do destino.
+    /// </summary>
+    /// <param name="fileSystem">Sistema de arquivos onde está o destino; <c>null</c> usa o local (<see cref="LocalFileSystem"/>).</param>
+    public RestoreService(IFileSystem? fileSystem = null)
+    {
+        _fs = fileSystem ?? LocalFileSystem.Instance;
+    }
+
     /// <summary>
     /// Lista os arquivos existentes em <c>&lt;destino&gt;/lixo/</c>.
     /// </summary>
@@ -31,29 +43,22 @@ public sealed partial class RestoreService
     {
         return Task.Run<IReadOnlyList<TrashEntry>>(() =>
         {
-            var trashRoot = Path.Combine(PathHelper.NormalizeDirectory(destDir), PathHelper.TrashFolderName);
-            if (!Directory.Exists(trashRoot))
+            var trashRoot = _fs.Combine(PathHelper.NormalizeDirectory(destDir), PathHelper.TrashFolderName);
+            if (!_fs.DirectoryExists(trashRoot))
             {
                 return Array.Empty<TrashEntry>();
             }
 
-            var options = new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = true,
-                AttributesToSkip = FileAttributes.ReparsePoint
-            };
-
             var entries = new List<TrashEntry>();
-            foreach (var file in new DirectoryInfo(trashRoot).EnumerateFiles("*", options))
+            foreach (var file in _fs.EnumerateFilesRecursive(trashRoot))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 entries.Add(new TrashEntry
                 {
-                    RelativePath = Path.GetRelativePath(trashRoot, file.FullName),
-                    FullPath = file.FullName,
+                    RelativePath = _fs.GetRelativePath(trashRoot, file.FullPath),
+                    FullPath = file.FullPath,
                     Size = file.Length,
-                    ModifiedUtc = file.LastWriteTimeUtc
+                    ModifiedUtc = file.LastWriteUtc
                 });
             }
 
@@ -82,7 +87,7 @@ public sealed partial class RestoreService
         return Task.Run(() =>
         {
             var destRoot = PathHelper.NormalizeDirectory(destDir);
-            var trashRoot = Path.Combine(destRoot, PathHelper.TrashFolderName);
+            var trashRoot = _fs.Combine(destRoot, PathHelper.TrashFolderName);
             var result = new RestoreResult();
             var touchedDirs = new List<string>();
 
@@ -103,7 +108,7 @@ public sealed partial class RestoreService
 
                 try
                 {
-                    if (!File.Exists(fullPath))
+                    if (!_fs.FileExists(fullPath))
                     {
                         result.Failed++;
                         logger?.Report($"[AVISO] Não encontrado em lixo/: {entry.RelativePath}");
@@ -118,14 +123,14 @@ public sealed partial class RestoreService
                         continue;
                     }
 
-                    var targetDir = Path.GetDirectoryName(target);
+                    var targetDir = _fs.GetDirectoryName(target);
                     if (!string.IsNullOrEmpty(targetDir))
                     {
-                        Directory.CreateDirectory(targetDir);
+                        _fs.CreateDirectory(targetDir);
                     }
 
-                    File.Move(fullPath, target, overwrite: false);
-                    touchedDirs.Add(Path.GetDirectoryName(fullPath)!);
+                    _fs.MoveFile(fullPath, target);
+                    touchedDirs.Add(_fs.GetDirectoryName(fullPath)!);
                     result.Restored++;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -136,7 +141,7 @@ public sealed partial class RestoreService
             }
 
             // Remove apenas pastas que ficaram vazias dentro de lixo/ (e o próprio lixo/, se vazio)
-            PathHelper.RemoveEmptyDirectories(touchedDirs, trashRoot, includeStopAt: true);
+            PathHelper.RemoveEmptyDirectories(_fs, touchedDirs, trashRoot, includeStopAt: true);
 
             logger?.Report($"[RESTAURAÇÃO] Concluída: {result.Restored} restaurados, {result.KeptInTrash} mantidos em lixo/ por já existirem, {result.Failed} falhas.");
             return result;
@@ -147,24 +152,25 @@ public sealed partial class RestoreService
     /// Determina o caminho de restauração: o nome original sem sufixo de desambiguação, se livre;
     /// senão o nome como está em <c>lixo/</c>, se livre; senão <c>null</c>.
     /// </summary>
-    private static string? ResolveRestoreTarget(string destRoot, string relativePath)
+    private string? ResolveRestoreTarget(string destRoot, string relativePath)
     {
-        var direct = Path.Combine(destRoot, relativePath);
-        var dir = Path.GetDirectoryName(direct)!;
-        var nameWithoutExt = Path.GetFileNameWithoutExtension(direct);
-        var ext = Path.GetExtension(direct);
+        var direct = _fs.Combine(destRoot, relativePath);
+        var dir = _fs.GetDirectoryName(direct)!;
+        var fileName = Path.GetFileName(direct);
+        var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+        var ext = Path.GetExtension(fileName);
 
         var stripped = CollisionSuffixRegex().Replace(nameWithoutExt, string.Empty);
         if (stripped.Length > 0 && stripped != nameWithoutExt)
         {
-            var original = Path.Combine(dir, stripped + ext);
-            if (!File.Exists(original) && !Directory.Exists(original))
+            var original = _fs.Combine(dir, stripped + ext);
+            if (!_fs.Exists(original))
             {
                 return original;
             }
         }
 
-        if (!File.Exists(direct) && !Directory.Exists(direct))
+        if (!_fs.Exists(direct))
         {
             return direct;
         }

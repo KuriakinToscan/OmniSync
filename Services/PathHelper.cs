@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using OmniSync.Services.FileSystems;
 
 namespace OmniSync.Services;
 
@@ -188,58 +189,88 @@ public static class PathHelper
     }
 
     /// <summary>
+    /// Move um arquivo local para dentro de uma pasta reservada. Equivale a
+    /// <see cref="MoveIntoReservedFolder(IFileSystem, string, string, string)"/> com <see cref="LocalFileSystem"/>.
+    /// </summary>
+    public static string? MoveIntoReservedFolder(string filePath, string reservedRoot, string relativePath)
+        => MoveIntoReservedFolder(LocalFileSystem.Instance, filePath, reservedRoot, relativePath);
+
+    /// <summary>
     /// Move um arquivo para dentro de uma pasta reservada (<c>lixo/</c> ou <c>old/</c>) preservando o caminho relativo.
     /// Nunca sobrescreve: se já houver homônimo, acrescenta sufixo de data/hora.
     /// </summary>
+    /// <param name="fs">Sistema de arquivos onde estão o arquivo e a pasta reservada.</param>
     /// <param name="filePath">Arquivo a mover.</param>
     /// <param name="reservedRoot">Raiz da pasta reservada.</param>
     /// <param name="relativePath">Caminho relativo a preservar dentro da pasta reservada.</param>
     /// <returns>Caminho final do arquivo movido, ou <c>null</c> se o arquivo de origem não existia mais.</returns>
-    public static string? MoveIntoReservedFolder(string filePath, string reservedRoot, string relativePath)
+    public static string? MoveIntoReservedFolder(IFileSystem fs, string filePath, string reservedRoot, string relativePath)
     {
-        if (!File.Exists(filePath)) return null;
+        if (!fs.FileExists(filePath)) return null;
 
-        var target = Path.Combine(reservedRoot, relativePath);
-        var targetDir = Path.GetDirectoryName(target);
+        var target = fs.Combine(reservedRoot, relativePath);
+        var targetDir = fs.GetDirectoryName(target);
         if (!string.IsNullOrEmpty(targetDir))
         {
-            Directory.CreateDirectory(targetDir);
+            fs.CreateDirectory(targetDir);
         }
 
-        var safeTarget = GetUniqueTargetPath(target);
-        File.Move(filePath, safeTarget, overwrite: false);
+        var safeTarget = GetUniqueTargetPath(fs, target);
+        fs.MoveFile(filePath, safeTarget);
         return safeTarget;
     }
+
+    /// <summary>
+    /// Caminho local único para <paramref name="targetFilePath"/>. Equivale a
+    /// <see cref="GetUniqueTargetPath(IFileSystem, string)"/> com <see cref="LocalFileSystem"/>.
+    /// </summary>
+    public static string GetUniqueTargetPath(string targetFilePath)
+        => GetUniqueTargetPath(LocalFileSystem.Instance, targetFilePath);
 
     /// <summary>
     /// Gera um caminho de arquivo único acrescentando o sufixo <c>_yyyyMMdd_HHmmss</c> (e contador, se necessário)
     /// quando o caminho desejado já existe.
     /// </summary>
-    public static string GetUniqueTargetPath(string targetFilePath)
+    /// <param name="fs">Sistema de arquivos onde o caminho será usado.</param>
+    /// <param name="targetFilePath">Caminho desejado.</param>
+    public static string GetUniqueTargetPath(IFileSystem fs, string targetFilePath)
     {
-        if (!File.Exists(targetFilePath) && !Directory.Exists(targetFilePath)) return targetFilePath;
+        if (!fs.Exists(targetFilePath)) return targetFilePath;
 
-        var dir = Path.GetDirectoryName(targetFilePath)!;
-        var nameWithoutExt = Path.GetFileNameWithoutExtension(targetFilePath);
-        var ext = Path.GetExtension(targetFilePath);
+        var dir = fs.GetDirectoryName(targetFilePath)!;
+        var fileName = Path.GetFileName(targetFilePath);
+        var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+        var ext = Path.GetExtension(fileName);
         var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
-        var candidate = Path.Combine(dir, $"{nameWithoutExt}_{timestamp}{ext}");
+        var candidate = fs.Combine(dir, $"{nameWithoutExt}_{timestamp}{ext}");
         int counter = 1;
-        while (File.Exists(candidate) || Directory.Exists(candidate))
+        while (fs.Exists(candidate))
         {
-            candidate = Path.Combine(dir, $"{nameWithoutExt}_{timestamp}_{counter}{ext}");
+            candidate = fs.Combine(dir, $"{nameWithoutExt}_{timestamp}_{counter}{ext}");
             counter++;
         }
         return candidate;
     }
 
     /// <summary>
+    /// Remove pastas locais que ficaram vazias. Equivale a
+    /// <see cref="RemoveEmptyDirectories(IFileSystem, IEnumerable{string}, string, bool)"/> com <see cref="LocalFileSystem"/>.
+    /// </summary>
+    public static int RemoveEmptyDirectories(IEnumerable<string> startDirectories, string stopAt, bool includeStopAt = false)
+        => RemoveEmptyDirectories(LocalFileSystem.Instance, startDirectories, stopAt, includeStopAt);
+
+    /// <summary>
     /// Remove, de baixo para cima, as pastas que ficaram vazias, sem nunca subir acima de <paramref name="stopAt"/>
     /// (que também é removida apenas se <paramref name="includeStopAt"/> for <c>true</c>).
     /// Usa exclusão não recursiva: uma pasta com qualquer conteúdo nunca é apagada.
     /// </summary>
-    public static int RemoveEmptyDirectories(IEnumerable<string> startDirectories, string stopAt, bool includeStopAt = false)
+    /// <param name="fs">Sistema de arquivos das pastas.</param>
+    /// <param name="startDirectories">Pastas de onde partir.</param>
+    /// <param name="stopAt">Pasta-limite.</param>
+    /// <param name="includeStopAt">Remove também a pasta-limite, se ficar vazia.</param>
+    /// <returns>Número de pastas removidas.</returns>
+    public static int RemoveEmptyDirectories(IFileSystem fs, IEnumerable<string> startDirectories, string stopAt, bool includeStopAt = false)
     {
         int removed = 0;
         var ordered = startDirectories
@@ -256,11 +287,11 @@ public static class PathHelper
             {
                 try
                 {
-                    if (!Directory.Exists(current) || Directory.EnumerateFileSystemEntries(current).Any())
+                    if (!fs.DirectoryExists(current) || !fs.IsDirectoryEmpty(current))
                     {
                         break;
                     }
-                    Directory.Delete(current, recursive: false);
+                    fs.DeleteEmptyDirectory(current);
                     removed++;
                 }
                 catch (IOException)
@@ -271,22 +302,29 @@ public static class PathHelper
                 {
                     break;
                 }
-                current = Path.GetDirectoryName(current);
+                current = fs.GetDirectoryName(current);
             }
         }
         return removed;
     }
 
     /// <summary>
+    /// Tenta excluir um arquivo local. Equivale a <see cref="TryDeleteFile(IFileSystem, string)"/> com <see cref="LocalFileSystem"/>.
+    /// </summary>
+    public static void TryDeleteFile(string path) => TryDeleteFile(LocalFileSystem.Instance, path);
+
+    /// <summary>
     /// Tenta excluir um arquivo temporário, ignorando falhas (o arquivo pode já ter sido removido).
     /// </summary>
-    public static void TryDeleteFile(string path)
+    /// <param name="fs">Sistema de arquivos do arquivo.</param>
+    /// <param name="path">Arquivo a excluir.</param>
+    public static void TryDeleteFile(IFileSystem fs, string path)
     {
         try
         {
-            if (File.Exists(path))
+            if (fs.FileExists(path))
             {
-                File.Delete(path);
+                fs.DeleteFile(path);
             }
         }
         catch (IOException)
