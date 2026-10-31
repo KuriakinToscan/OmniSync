@@ -9,7 +9,8 @@
         Title="OmniSync"
         Width="1320" Height="820"
         MinWidth="1080" MinHeight="640"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized">
 
     <Window.KeyBindings>
         <KeyBinding Gesture="F5" Command="{Binding ScanCommand}" />
