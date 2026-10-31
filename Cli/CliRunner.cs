@@ -122,7 +122,7 @@ public sealed class CliRunner
         }
 
         bool run = command.Action == CliAction.Run;
-        Report($"[CLI] {(run ? "Sincronizando" : "Analisando")} a tarefa \"{profile.Name}\": {source} → {dest}", alwaysShow: true);
+        Report($"[CLI] {(run ? "Sincronizando" : "Analisando")} a tarefa \"{profile.Name}\": {source} -> {dest}", alwaysShow: true);
 
         var logger = new CliLogger(this, command.Verbose);
         var options = new ScanOptions
