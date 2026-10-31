@@ -69,6 +69,29 @@ public static class PathHelper
     }
 
     /// <summary>
+    /// Expande variáveis de ambiente (<c>%USERPROFILE%</c>, <c>%OneDrive%</c>...) e, no Linux, <c>~</c> e
+    /// <c>$HOME</c> no início do caminho. Variáveis inexistentes ficam como estão.
+    /// </summary>
+    /// <param name="path">Caminho digitado.</param>
+    /// <returns>Caminho expandido e sem espaços nas pontas.</returns>
+    public static string ExpandUserPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        var result = Environment.ExpandEnvironmentVariables(path.Trim());
+        if (!OperatingSystem.IsWindows())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(home))
+            {
+                if (result == "~" || result == "$HOME") return home;
+                if (result.StartsWith("~/", StringComparison.Ordinal)) return home + result[1..];
+                if (result.StartsWith("$HOME/", StringComparison.Ordinal)) return home + result[5..];
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Calcula o diretório de destino efetivo. Com <paramref name="useSourceFolderName"/> ativo (ou quando o destino é
     /// a raiz de um disco, ex.: <c>G:\</c>), anexa o nome da pasta de origem, exceto se o destino já terminar nele.
     /// </summary>

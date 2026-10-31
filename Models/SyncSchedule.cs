@@ -124,6 +124,44 @@ public sealed class SyncSchedule
         };
     }
 
+    /// <summary>
+    /// Lê um horário digitado: "18:30", "1830", "7:05", "7h05", "7h" ou "7".
+    /// </summary>
+    /// <param name="text">Texto digitado.</param>
+    /// <param name="time">Horário lido (horas e minutos).</param>
+    /// <returns><c>true</c> se o texto é um horário de 00:00 a 23:59.</returns>
+    public static bool TryParseTime(string? text, out TimeSpan time)
+    {
+        time = default;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var t = text.Trim().ToLowerInvariant().Replace('h', ':').Replace('.', ':');
+        if (t.EndsWith(':')) t = t[..^1];
+        string hourPart, minutePart;
+        int colon = t.IndexOf(':');
+        if (colon >= 0)
+        {
+            hourPart = t[..colon];
+            minutePart = t[(colon + 1)..];
+        }
+        else if (t.Length is 3 or 4)
+        {
+            hourPart = t[..^2];
+            minutePart = t[^2..];
+        }
+        else
+        {
+            hourPart = t;
+            minutePart = "0";
+        }
+        if (hourPart.Length is 0 or > 2 || minutePart.Length is 0 or > 2) return false;
+        if (!hourPart.All(char.IsAsciiDigit) || !minutePart.All(char.IsAsciiDigit)) return false;
+        int hour = int.Parse(hourPart);
+        int minute = int.Parse(minutePart);
+        if (hour > 23 || minute > 59) return false;
+        time = new TimeSpan(hour, minute, 0);
+        return true;
+    }
+
     /// <summary>Cópia independente (para editar sem afetar a tarefa salva).</summary>
     public SyncSchedule Clone() => new()
     {

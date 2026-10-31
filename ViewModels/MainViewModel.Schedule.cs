@@ -80,9 +80,17 @@ public partial class MainViewModel
     [ObservableProperty]
     private int _scheduleFrequencyIndex;
 
-    /// <summary>Horário da execução.</summary>
+    /// <summary>Horário da execução (último horário válido digitado).</summary>
+    private TimeSpan _scheduleTime = new(18, 0, 0);
+
+    /// <summary>Horário como digitado no campo (aceita 18:30, 1830, 7h05, 7).</summary>
     [ObservableProperty]
-    private TimeSpan? _scheduleTime = new TimeSpan(18, 0, 0);
+    private string _scheduleTimeText = "18:00";
+
+    /// <summary>O texto do horário não é um horário válido.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveScheduleCommand))]
+    private bool _scheduleTimeInvalid;
 
     /// <summary>Em conflito, substituir quando a origem for mais nova (senão, manter o destino).</summary>
     [ObservableProperty]
@@ -170,7 +178,40 @@ public partial class MainViewModel
         MarkScheduleDirty();
     }
 
-    partial void OnScheduleTimeChanged(TimeSpan? value) => MarkScheduleDirty();
+    partial void OnScheduleTimeTextChanged(string value)
+    {
+        if (SyncSchedule.TryParseTime(value, out var time))
+        {
+            _scheduleTime = time;
+            ScheduleTimeInvalid = false;
+        }
+        else
+        {
+            ScheduleTimeInvalid = true;
+        }
+        MarkScheduleDirty();
+    }
+
+    /// <summary>
+    /// Reescreve o horário digitado no formato HH:MM (ao sair do campo), quando válido.
+    /// </summary>
+    public void NormalizeScheduleTimeText()
+    {
+        if (ScheduleTimeInvalid) return;
+        var normalized = $"{_scheduleTime.Hours:00}:{_scheduleTime.Minutes:00}";
+        if (ScheduleTimeText == normalized) return;
+        bool wasDirty = ScheduleDirty;
+        _loadingSchedule = true;
+        try
+        {
+            ScheduleTimeText = normalized;
+        }
+        finally
+        {
+            _loadingSchedule = false;
+        }
+        ScheduleDirty = wasDirty;
+    }
 
     partial void OnScheduleReplaceNewerChanged(bool value) => MarkScheduleDirty();
 
@@ -179,6 +220,7 @@ public partial class MainViewModel
         if (_loadingSchedule) return;
         ScheduleDirty = true;
         ScheduleError = string.Empty;
+        SaveScheduleCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -198,7 +240,7 @@ public partial class MainViewModel
                 ScheduleFrequency.Weekly => 1,
                 _ => 2
             };
-            ScheduleTime = new TimeSpan(schedule.Hour, schedule.Minute, 0);
+            ScheduleTimeText = $"{schedule.Hour:00}:{schedule.Minute:00}";
             ScheduleReplaceNewer = schedule.ConflictPolicy == CliConflictPolicy.ReplaceWhenSourceNewer;
             foreach (var day in ScheduleDays)
             {
@@ -220,7 +262,7 @@ public partial class MainViewModel
     /// </summary>
     private SyncSchedule BuildScheduleFromEditor()
     {
-        var time = ScheduleTime ?? new TimeSpan(18, 0, 0);
+        var time = _scheduleTime;
         return new SyncSchedule
         {
             Enabled = ScheduleEnabled,
@@ -291,7 +333,7 @@ public partial class MainViewModel
         return $"{SyncSchedule.ShortName(next.DayOfWeek).ToLowerInvariant()} {next:dd/MM} às {time}";
     }
 
-    private bool CanSaveSchedule() => ScheduleDirty && !IsSavingSchedule && !IsBusy;
+    private bool CanSaveSchedule() => ScheduleDirty && !IsSavingSchedule && !IsBusy && !(ScheduleEnabled && ScheduleTimeInvalid && ScheduleHasTime);
 
     /// <summary>
     /// Grava o agendamento do editor: registra no agendador do sistema (ligado) ou remove (desligado).

@@ -94,7 +94,7 @@ public sealed class CliRunner
         _output.WriteLine(PtText.Count(settings.Profiles.Count, "tarefa salva:", "tarefas salvas:"));
         foreach (var p in settings.Profiles)
         {
-            var dest = PathHelper.ResolveEffectiveDestination(p.SourcePath, p.DestinationPath, p.UseSourceFolderNameInDestination);
+            var dest = PathHelper.ResolveEffectiveDestination(PathHelper.ExpandUserPath(p.SourcePath), PathHelper.ExpandUserPath(p.DestinationPath), p.UseSourceFolderNameInDestination);
             _output.WriteLine();
             _output.WriteLine($"  {p.Name}");
             _output.WriteLine($"    Origem:  {p.SourcePath}");
@@ -129,7 +129,7 @@ public sealed class CliRunner
         };
 
         string? invalid = null;
-        var source = profile.SourcePath.Trim();
+        var source = PathHelper.ExpandUserPath(profile.SourcePath);
         var dest = string.Empty;
         if (string.IsNullOrWhiteSpace(profile.SourcePath) || string.IsNullOrWhiteSpace(profile.DestinationPath))
         {
@@ -137,7 +137,7 @@ public sealed class CliRunner
         }
         else
         {
-            dest = PathHelper.ResolveEffectiveDestination(source, profile.DestinationPath, profile.UseSourceFolderNameInDestination);
+            dest = PathHelper.ResolveEffectiveDestination(source, PathHelper.ExpandUserPath(profile.DestinationPath), profile.UseSourceFolderNameInDestination);
             invalid = PathHelper.DescribePairProblem(source, dest)
                       ?? (Directory.Exists(source) ? null : $"A origem não existe ou não está acessível: {source}");
         }

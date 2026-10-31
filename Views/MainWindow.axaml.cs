@@ -132,6 +132,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Ao sair do campo de origem ou destino, expande <c>%USERPROFILE%</c> e similares.
+    /// </summary>
+    private void OnPathBoxLostFocus(object? sender, RoutedEventArgs e) => (DataContext as MainViewModel)?.ExpandPaths();
+
+    /// <summary>
+    /// Ao sair do campo de horário, mostra o horário no formato HH:MM.
+    /// </summary>
+    private void OnScheduleTimeLostFocus(object? sender, RoutedEventArgs e) => (DataContext as MainViewModel)?.NormalizeScheduleTimeText();
+
+    /// <summary>
     /// Salva as tarefas e as preferências do usuário ao fechar a janela.
     /// </summary>
     protected override void OnClosing(WindowClosingEventArgs e)

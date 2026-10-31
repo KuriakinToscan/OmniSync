@@ -124,15 +124,17 @@
                                     <Border Classes="dot"
                                             Classes.conflict="{Binding IsPlanReady}" Classes.running="{Binding IsRunning}"
                                             Classes.success="{Binding IsSuccess}" Classes.error="{Binding IsProblem}" />
-                                    <DockPanel Grid.Column="1">
-                                        <PathIcon DockPanel.Dock="Right" Data="{StaticResource IconHistory}" Classes="small accent-text"
-                                                  Width="12" Height="12" Margin="6,0,0,0" VerticalAlignment="Center"
+                                    <TextBlock Grid.Column="1" Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Name}" />
+                                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*">
+                                        <PathIcon Data="{StaticResource IconHistory}" Classes="small accent-text"
+                                                  Width="11" Height="11" VerticalAlignment="Top" Margin="0,2,5,0"
                                                   IsVisible="{Binding IsScheduled}" ToolTip.Tip="{Binding ScheduleTip}"
                                                   AutomationProperties.Name="Tarefa agendada" />
-                                        <TextBlock Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
-                                    </DockPanel>
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextTrimming="CharacterEllipsis" />
-                                    <Button Grid.Column="2" Grid.RowSpan="2" Classes="icon-only delete-task" VerticalAlignment="Top" Margin="0,-2,-4,0"
+                                        <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                    <Button Grid.Column="2" Classes="icon-only delete-task" VerticalAlignment="Top" Margin="0,-2,-4,0"
                                             Command="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).DeleteProfileCommand}"
                                             CommandParameter="{Binding}"
                                             ToolTip.Tip="Excluir tarefa (os arquivos não são tocados)" AutomationProperties.Name="Excluir tarefa">
@@ -179,6 +181,7 @@
                                     <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
                                              PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
                                              ToolTip.Tip="{Binding SourcePath}"
+                                             LostFocus="OnPathBoxLostFocus"
                                              AutomationProperties.Name="Diretório de origem" />
                                 </DockPanel>
                             </Border>
@@ -200,6 +203,7 @@
                                         <TextBox Classes="mono" Text="{Binding DestinationPath}"
                                                  PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
                                                  ToolTip.Tip="{Binding DestinationPath}"
+                                                 LostFocus="OnPathBoxLostFocus"
                                                  AutomationProperties.Name="Diretório de destino" />
                                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasEffectiveDestinationHint}">
                                             <TextBlock Classes="caption" Text="Sincroniza em" />
@@ -321,8 +325,12 @@
                                         </StackPanel>
                                         <StackPanel Spacing="6" IsVisible="{Binding ScheduleHasTime}">
                                             <TextBlock Text="Horário" FontWeight="SemiBold" />
-                                            <TimePicker SelectedTime="{Binding ScheduleTime}" ClockIdentifier="24HourClock" MinuteIncrement="5"
-                                                        AutomationProperties.Name="Horário" />
+                                            <TextBox Text="{Binding ScheduleTimeText}" Width="110" Classes="mono" MaxLength="5"
+                                                     PlaceholderText="HH:MM" LostFocus="OnScheduleTimeLostFocus"
+                                                     ToolTip.Tip="Digite o horário: 18:30, 1830, 7h05 ou 7"
+                                                     AutomationProperties.Name="Horário" />
+                                            <TextBlock Text="Use HH:MM, de 00:00 a 23:59." Classes="caption danger-text"
+                                                       IsVisible="{Binding ScheduleTimeInvalid}" />
                                         </StackPanel>
                                     </WrapPanel>
 

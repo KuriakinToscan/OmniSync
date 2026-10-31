@@ -163,6 +163,59 @@ public class ScheduleTests : IDisposable
         Assert.Equal("seg 02/11 às 18:00", MainViewModel.FormatNextRun(new DateTime(2026, 11, 2, 18, 0, 0), now));
     }
 
+    /// <summary>
+    /// Horário digitado: formatos aceitos.
+    /// </summary>
+    [Theory]
+    [InlineData("18:30", 18, 30)]
+    [InlineData("1830", 18, 30)]
+    [InlineData("730", 7, 30)]
+    [InlineData("7:05", 7, 5)]
+    [InlineData("7h05", 7, 5)]
+    [InlineData("7H", 7, 0)]
+    [InlineData("7", 7, 0)]
+    [InlineData(" 00:00 ", 0, 0)]
+    [InlineData("23:59", 23, 59)]
+    public void TryParseTime_ShouldAcceptCommonFormats(string text, int hour, int minute)
+    {
+        Assert.True(SyncSchedule.TryParseTime(text, out var time));
+        Assert.Equal(new TimeSpan(hour, minute, 0), time);
+    }
+
+    /// <summary>
+    /// Horários impossíveis ou texto qualquer são recusados.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("24:00")]
+    [InlineData("12:60")]
+    [InlineData("abc")]
+    [InlineData("1:2:3")]
+    [InlineData("12345")]
+    [InlineData("-1")]
+    public void TryParseTime_ShouldRejectInvalid(string text)
+    {
+        Assert.False(SyncSchedule.TryParseTime(text, out _));
+    }
+
+    /// <summary>
+    /// %VARIÁVEL% é expandida; variável inexistente fica como está; vazio vira vazio.
+    /// </summary>
+    [Fact]
+    public void ExpandUserPath_ShouldExpandEnvironmentVariables()
+    {
+        Environment.SetEnvironmentVariable("OMNISYNC_TESTE_DIR", "/dados/teste");
+        Assert.Equal("/dados/teste/Campo", PathHelper.ExpandUserPath("  %OMNISYNC_TESTE_DIR%/Campo "));
+        Assert.Equal("%NAO_EXISTE_OMNI%/x", PathHelper.ExpandUserPath("%NAO_EXISTE_OMNI%/x"));
+        Assert.Equal(string.Empty, PathHelper.ExpandUserPath("   "));
+        if (!OperatingSystem.IsWindows())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            Assert.Equal(home + "/Fotos", PathHelper.ExpandUserPath("~/Fotos"));
+            Assert.Equal(home + "/Fotos", PathHelper.ExpandUserPath("$HOME/Fotos"));
+        }
+    }
+
     // ------------------------------------------------------------------ Agendador do Windows e systemd
 
     /// <summary>

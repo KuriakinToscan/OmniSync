@@ -644,6 +644,9 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public ObservableCollection<LogEntry> Logs { get; } = new();
 
+    /// <summary>Nenhuma linha no registro desta sessão (a janela Registro mostra uma explicação).</summary>
+    public bool HasNoSessionLogs => Logs.Count == 0;
+
     /// <summary>
     /// Avisos e erros do registro (mais recentes no topo).
     /// </summary>
@@ -678,6 +681,7 @@ public partial class MainViewModel : ViewModelBase
         _persistSettings = loadSettings;
         _settings = loadSettings ? SettingsService.Load() : new AppSettings();
         InitializeScheduleEditor();
+        Logs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoSessionLogs));
 
         foreach (var profile in _settings.Profiles)
         {
@@ -903,6 +907,18 @@ public partial class MainViewModel : ViewModelBase
         NotifyDestination();
         InvalidatePlan();
         RefreshSetupStatus();
+    }
+
+    /// <summary>
+    /// Expande variáveis de ambiente (<c>%USERPROFILE%</c>, <c>~</c>) nos campos de origem e destino. Chamado ao sair
+    /// do campo e antes de analisar, para que a tarefa salve e use o caminho real.
+    /// </summary>
+    public void ExpandPaths()
+    {
+        var source = PathHelper.ExpandUserPath(SourcePath);
+        if (source != SourcePath) SourcePath = source;
+        var dest = PathHelper.ExpandUserPath(DestinationPath);
+        if (dest != DestinationPath) DestinationPath = dest;
     }
 
     /// <summary>
@@ -1229,6 +1245,7 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        ExpandPaths();
         var effectiveDest = EffectiveDestinationPath;
 
         SaveSettings();
