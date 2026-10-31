@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using OmniSync.Cli;
 using OmniSync.Models;
 using OmniSync.Services;
 using OmniSync.ViewModels;
@@ -20,6 +21,12 @@ namespace OmniSync;
 /// </summary>
 public partial class App : Application
 {
+    /// <summary>
+    /// Aviso de uma execução agendada a exibir no lugar da janela principal (definido pelo modo de linha de comando
+    /// antes de iniciar a interface), ou <c>null</c> para o uso normal.
+    /// </summary>
+    public static CliNotification? PendingNotification { get; set; }
+
     /// <summary>
     /// Carrega os recursos e estilos XAML definidos em <c>App.axaml</c>.
     /// </summary>
@@ -47,6 +54,14 @@ public partial class App : Application
             e.Handled = true;
         };
 
+        if (PendingNotification != null && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime notifyLifetime)
+        {
+            // Aviso de execução agendada: só a janelinha, sem a janela principal
+            notifyLifetime.MainWindow = new NotificationWindow(PendingNotification);
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             bool isSelfTest = desktop.Args != null && desktop.Args.Contains("--self-test");
@@ -56,6 +71,10 @@ public partial class App : Application
                 DataContext = vm,
             };
             desktop.MainWindow = mainWin;
+            if (!isSelfTest)
+            {
+                mainWin.Opened += async (_, _) => await mainWin.RunStartupChecksAsync();
+            }
 
             // Modo de verificação automatizada de ponta a ponta (--self-test)
             if (isSelfTest)

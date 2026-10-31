@@ -46,7 +46,9 @@ public enum CliExitCode
     /// <summary>Interrompido (Ctrl+C); nenhum arquivo parcial fica no destino.</summary>
     Cancelled = 4,
     /// <summary>Erro inesperado (detalhes no log).</summary>
-    UnexpectedError = 5
+    UnexpectedError = 5,
+    /// <summary>A mesma tarefa já está sendo sincronizada (pela interface ou por outro agendamento); nada foi feito.</summary>
+    AlreadyRunning = 6
 }
 
 /// <summary>
@@ -57,12 +59,14 @@ public enum CliExitCode
 /// <param name="ConflictPolicy">Política para conflitos sem decisão.</param>
 /// <param name="ReportPath">Arquivo CSV a gravar com o plano e o resultado, ou <c>null</c>.</param>
 /// <param name="Verbose">Se todas as linhas do registro vão também para o console.</param>
+/// <param name="Scheduled">Execução disparada pelo agendador: registra a origem no histórico e mostra o aviso ao fim.</param>
 public sealed record CliCommand(
     CliAction Action,
     string? TaskName = null,
     CliConflictPolicy ConflictPolicy = CliConflictPolicy.Keep,
     string? ReportPath = null,
-    bool Verbose = false)
+    bool Verbose = false,
+    bool Scheduled = false)
 {
     private static readonly string[] HelpTokens = { "--ajuda", "--help", "-h", "/?" };
     private static readonly string[] ListTokens = { "--listar", "--list" };
@@ -97,6 +101,7 @@ public sealed record CliCommand(
         var policy = CliConflictPolicy.Keep;
         string? report = null;
         bool verbose = false;
+        bool scheduled = false;
 
         for (int i = 0; i < args.Count; i++)
         {
@@ -158,6 +163,10 @@ public sealed record CliCommand(
             {
                 verbose = true;
             }
+            else if (Matches(arg, new[] { "--agendado", "--scheduled" }))
+            {
+                scheduled = true;
+            }
             else
             {
                 error = $"Argumento desconhecido: {arg}. Use --ajuda para ver as opções.";
@@ -171,7 +180,13 @@ public sealed record CliCommand(
             return false;
         }
 
-        command = new CliCommand(action.Value, taskName, policy, report, verbose);
+        if (scheduled && action == CliAction.List)
+        {
+            error = "--agendado só vale com --analisar ou --sincronizar.";
+            return false;
+        }
+
+        command = new CliCommand(action.Value, taskName, policy, report, verbose, scheduled);
         return true;
     }
 
@@ -198,12 +213,15 @@ public sealed record CliCommand(
                           anterior vai para old/. Destino mais novo é sempre mantido.
           --relatorio     Grava o CSV do plano (ao analisar) ou do resultado (ao sincronizar).
           --detalhado     Mostra no console todas as linhas do registro, arquivo por arquivo.
+          --agendado      Usada pelo agendamento: registra a execução como agendada e mostra
+                          uma janela de aviso ao fim (só quando há algo a avisar).
 
         Segurança: se a análise indicar remoção em massa (muitos órfãos para lixo/), a sincronização
         é abortada sem alterar nada. Revise a tarefa pela interface.
 
         Códigos de saída: 0 sem falhas; 1 com falhas; 2 abortado por remoção em massa;
-        3 argumento, tarefa ou caminho inválido; 4 interrompido; 5 erro inesperado.
+        3 argumento, tarefa ou caminho inválido; 4 interrompido; 5 erro inesperado;
+        6 a tarefa já está sendo sincronizada.
 
         No PowerShell, use "| Out-Host" para esperar o fim e ver a saída:
           .\OmniSync.exe --sincronizar "Volume" | Out-Host ; $LASTEXITCODE

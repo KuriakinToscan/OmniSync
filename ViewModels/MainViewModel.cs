@@ -644,6 +644,9 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public ObservableCollection<LogEntry> Logs { get; } = new();
 
+    /// <summary>Nenhuma linha no registro desta sessão (a janela Registro mostra uma explicação).</summary>
+    public bool HasNoSessionLogs => Logs.Count == 0;
+
     /// <summary>
     /// Avisos e erros do registro (mais recentes no topo).
     /// </summary>
@@ -677,6 +680,8 @@ public partial class MainViewModel : ViewModelBase
         };
         _persistSettings = loadSettings;
         _settings = loadSettings ? SettingsService.Load() : new AppSettings();
+        InitializeScheduleEditor();
+        Logs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoSessionLogs));
 
         foreach (var profile in _settings.Profiles)
         {
@@ -687,6 +692,7 @@ public partial class MainViewModel : ViewModelBase
             Profiles.Add(CreateProfileItem());
         }
 
+        RefreshRunsFromHistory();
         SelectedProfile = Profiles.FirstOrDefault(p => p.Profile.Id == _settings.ActiveProfileId) ?? Profiles[0];
     }
 
@@ -766,6 +772,7 @@ public partial class MainViewModel : ViewModelBase
             _suppressInvalidation = false;
         }
 
+        LoadScheduleEditor(p);
         ClearPlan();
         IsShowingResult = false;
         LastResult = null;
@@ -806,10 +813,12 @@ public partial class MainViewModel : ViewModelBase
         item ??= SelectedProfile;
         if (item == null) return;
 
+        bool scheduled = item.Profile.Schedule?.Enabled == true;
         if (ConfirmAsync != null &&
             !await ConfirmAsync(
                 "Excluir tarefa",
-                $"Excluir a tarefa \"{item.Name}\"? Só a configuração salva é apagada; nenhum arquivo da origem ou do destino é alterado.",
+                $"Excluir a tarefa \"{item.Name}\"? Só a configuração salva é apagada; nenhum arquivo da origem ou do destino é alterado." +
+                (scheduled ? " O agendamento desta tarefa também é removido." : string.Empty),
                 "Excluir"))
         {
             return;
@@ -827,6 +836,7 @@ public partial class MainViewModel : ViewModelBase
             SelectedProfile = Profiles[Math.Clamp(index, 0, Profiles.Count - 1)];
         }
         SaveSettings();
+        await RemoveScheduleAndHistoryAsync(item.Profile);
     }
 
     // ------------------------------------------------------------------
@@ -897,6 +907,18 @@ public partial class MainViewModel : ViewModelBase
         NotifyDestination();
         InvalidatePlan();
         RefreshSetupStatus();
+    }
+
+    /// <summary>
+    /// Expande variáveis de ambiente (<c>%USERPROFILE%</c>, <c>~</c>) nos campos de origem e destino. Chamado ao sair
+    /// do campo e antes de analisar, para que a tarefa salve e use o caminho real.
+    /// </summary>
+    public void ExpandPaths()
+    {
+        var source = PathHelper.ExpandUserPath(SourcePath);
+        if (source != SourcePath) SourcePath = source;
+        var dest = PathHelper.ExpandUserPath(DestinationPath);
+        if (dest != DestinationPath) DestinationPath = dest;
     }
 
     /// <summary>
@@ -1106,6 +1128,8 @@ public partial class MainViewModel : ViewModelBase
         NewProfileCommand.NotifyCanExecuteChanged();
         DeleteProfileCommand.NotifyCanExecuteChanged();
         EditSetupCommand.NotifyCanExecuteChanged();
+        SaveScheduleCommand.NotifyCanExecuteChanged();
+        FixScheduleCommand.NotifyCanExecuteChanged();
     }
 
     // ------------------------------------------------------------------
@@ -1221,6 +1245,7 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        ExpandPaths();
         var effectiveDest = EffectiveDestinationPath;
 
         SaveSettings();
@@ -1356,6 +1381,17 @@ public partial class MainViewModel : ViewModelBase
         if (ConfirmSyncAsync != null && !await ConfirmSyncAsync(summary))
         {
             StatusMessage = "Sincronização não iniciada.";
+            return;
+        }
+
+        // Mesma trava do agendador: impede que a interface e uma execução agendada sincronizem a tarefa ao mesmo tempo
+        using var runLock = _persistSettings && SelectedProfile != null ? TaskLock.TryAcquire(SelectedProfile.Profile.Id) : null;
+        if (_persistSettings && SelectedProfile != null && runLock == null)
+        {
+            const string busy = "Esta tarefa está sendo sincronizada agora por um agendamento. Aguarde terminar e analise de novo.";
+            StatusMessage = busy;
+            AddLog($"[AVISO] {busy}");
+            if (NotifyAsync != null) await NotifyAsync("Tarefa em execução", busy);
             return;
         }
 
@@ -1535,8 +1571,10 @@ public partial class MainViewModel : ViewModelBase
         p.LastRunUtc = DateTime.UtcNow;
         p.LastOutcome = cancelled ? ProfileRunOutcome.Cancelled : result.HasFailures ? ProfileRunOutcome.Failures : ProfileRunOutcome.Success;
         p.LastFailedCount = result.Failed;
+        AppendManualRunToHistory(p, result, cancelled);
         SelectedProfile.RefreshFromLastRun();
         SaveSettings();
+        RefreshScheduleStatus();
     }
 
     /// <summary>

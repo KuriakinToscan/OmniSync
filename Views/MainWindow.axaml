@@ -124,9 +124,17 @@
                                     <Border Classes="dot"
                                             Classes.conflict="{Binding IsPlanReady}" Classes.running="{Binding IsRunning}"
                                             Classes.success="{Binding IsSuccess}" Classes.error="{Binding IsProblem}" />
-                                    <TextBlock Grid.Column="1" Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextTrimming="CharacterEllipsis" />
-                                    <Button Grid.Column="2" Grid.RowSpan="2" Classes="icon-only delete-task" VerticalAlignment="Top" Margin="0,-2,-4,0"
+                                    <TextBlock Grid.Column="1" Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Name}" />
+                                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*">
+                                        <PathIcon Data="{StaticResource IconHistory}" Classes="small accent-text"
+                                                  Width="11" Height="11" VerticalAlignment="Top" Margin="0,2,5,0"
+                                                  IsVisible="{Binding IsScheduled}" ToolTip.Tip="{Binding ScheduleTip}"
+                                                  AutomationProperties.Name="Tarefa agendada" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                    <Button Grid.Column="2" Classes="icon-only delete-task" VerticalAlignment="Top" Margin="0,-2,-4,0"
                                             Command="{Binding $parent[ListBox].((vm:MainViewModel)DataContext).DeleteProfileCommand}"
                                             CommandParameter="{Binding}"
                                             ToolTip.Tip="Excluir tarefa (os arquivos não são tocados)" AutomationProperties.Name="Excluir tarefa">
@@ -173,6 +181,7 @@
                                     <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
                                              PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
                                              ToolTip.Tip="{Binding SourcePath}"
+                                             LostFocus="OnPathBoxLostFocus" x:Name="SourcePathBox"
                                              AutomationProperties.Name="Diretório de origem" />
                                 </DockPanel>
                             </Border>
@@ -194,6 +203,7 @@
                                         <TextBox Classes="mono" Text="{Binding DestinationPath}"
                                                  PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
                                                  ToolTip.Tip="{Binding DestinationPath}"
+                                                 LostFocus="OnPathBoxLostFocus" x:Name="DestinationPathBox"
                                                  AutomationProperties.Name="Diretório de destino" />
                                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasEffectiveDestinationHint}">
                                             <TextBlock Classes="caption" Text="Sincroniza em" />
@@ -279,6 +289,109 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                        </Border>
+
+                        <Border Classes="card" Padding="20,16">
+                            <StackPanel Spacing="14">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <PathIcon Data="{StaticResource IconHistory}" Classes="small accent-text" />
+                                            <TextBlock Text="Agendamento" Classes="section" FontSize="14" />
+                                        </StackPanel>
+                                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                   Text="Roda sozinho, com o OmniSync fechado, enquanto você estiver com a sessão iniciada (também na bateria). Sem perguntas: conflitos seguem a regra abaixo e remoção em massa aborta." />
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding ScheduleEnabled}" OnContent="Ligado" OffContent="Desligado"
+                                                  VerticalAlignment="Top" AutomationProperties.Name="Agendamento ligado" />
+                                </Grid>
+
+                                <StackPanel Spacing="14" IsVisible="{Binding ScheduleEnabled}">
+                                    <WrapPanel ItemSpacing="24" LineSpacing="12">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="O que fazer" FontWeight="SemiBold" />
+                                            <ComboBox SelectedIndex="{Binding ScheduleModeIndex}" MinWidth="230" AutomationProperties.Name="O que fazer">
+                                                <ComboBoxItem Content="Sincronizar" />
+                                                <ComboBoxItem Content="Só analisar e avisar" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Quando" FontWeight="SemiBold" />
+                                            <ComboBox SelectedIndex="{Binding ScheduleFrequencyIndex}" MinWidth="230" AutomationProperties.Name="Quando">
+                                                <ComboBoxItem Content="Todo dia" />
+                                                <ComboBoxItem Content="Dias da semana" />
+                                                <ComboBoxItem Content="Ao entrar no sistema" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Spacing="6" IsVisible="{Binding ScheduleHasTime}">
+                                            <TextBlock Text="Horário" FontWeight="SemiBold" />
+                                            <TextBox Text="{Binding ScheduleTimeText}" Width="110" Classes="mono" MaxLength="5"
+                                                     PlaceholderText="HH:MM" LostFocus="OnScheduleTimeLostFocus" x:Name="ScheduleTimeBox"
+                                                     ToolTip.Tip="Digite o horário: 18:30, 1830, 7h05 ou 7"
+                                                     AutomationProperties.Name="Horário" />
+                                            <TextBlock Text="Use HH:MM, de 00:00 a 23:59." Classes="caption danger-text"
+                                                       IsVisible="{Binding ScheduleTimeInvalid}" />
+                                        </StackPanel>
+                                    </WrapPanel>
+
+                                    <ItemsControl ItemsSource="{Binding ScheduleDays}" IsVisible="{Binding ScheduleIsWeekly}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ScheduleDayOption">
+                                                <ToggleButton Content="{Binding Label}" IsChecked="{Binding IsSelected}" MinWidth="52"
+                                                              HorizontalContentAlignment="Center" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <CheckBox IsChecked="{Binding ScheduleReplaceNewer}" IsVisible="{Binding ScheduleIsSync}">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="Em conflito, substituir quando a origem for mais nova" FontWeight="SemiBold" />
+                                            <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                       Text="A versão anterior vai para old/. Desmarcado, o arquivo do destino é sempre mantido. Destino mais novo nunca é substituído." />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </StackPanel>
+
+                                <Border Classes="warning-banner" IsVisible="{Binding HasScheduleWarning}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                        <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                        <TextBlock Grid.Column="1" Text="{Binding ScheduleWarning}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                        <Button Grid.Column="2" Classes="secondary" Content="Corrigir" Command="{Binding FixScheduleCommand}"
+                                                ToolTip.Tip="Registrar de novo o agendamento, apontando para o OmniSync instalado" />
+                                    </Grid>
+                                </Border>
+
+                                <Border Classes="danger-banner" IsVisible="{Binding HasScheduleError}">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                        <PathIcon Data="{StaticResource IconWarning}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                        <TextBlock Grid.Column="1" Text="{Binding ScheduleError}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </Border>
+
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                    <Button Classes="accent primary" Command="{Binding SaveScheduleCommand}" Content="Salvar agendamento" />
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap" Classes="subtle"
+                                               Text="{Binding ScheduleStatusText}" IsVisible="{Binding !ScheduleDirty}" />
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap" Classes="subtle"
+                                               Text="Alterações não salvas. Clique em Salvar agendamento para valer." IsVisible="{Binding ScheduleDirty}" />
+                                </Grid>
+
+                                <StackPanel Spacing="4" IsVisible="{Binding HasRecentRuns}">
+                                    <TextBlock Text="Últimas execuções" FontWeight="SemiBold" />
+                                    <ItemsControl ItemsSource="{Binding RecentRuns}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <TextBlock Text="{Binding}" Classes="caption" TextWrapping="Wrap" Margin="0,1" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
                         </Border>
 
                         <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">

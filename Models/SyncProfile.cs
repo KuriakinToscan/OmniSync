@@ -57,6 +57,9 @@ public sealed class SyncProfile
     /// <summary>Padrões de exclusão separados por ponto e vírgula.</summary>
     public string ExcludePatterns { get; set; } = string.Empty;
 
+    /// <summary>Agendamento da tarefa, ou <c>null</c> quando nunca configurado.</summary>
+    public SyncSchedule? Schedule { get; set; }
+
     /// <summary>Momento (UTC) da última sincronização executada, ou <c>null</c> se nunca executada.</summary>
     public DateTime? LastRunUtc { get; set; }
 

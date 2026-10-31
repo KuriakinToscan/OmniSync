@@ -37,6 +37,11 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
+        <TextBlock Grid.Row="1" Classes="subtle" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center"
+                   VerticalAlignment="Center" MaxWidth="460" Margin="18"
+                   IsVisible="{Binding HasNoSessionLogs}"
+                   Text="Nenhuma operação nesta sessão. As execuções agendadas aparecem em Últimas execuções, no cartão Agendamento, e na pasta de logs." />
+
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="18,10">
             <TextBlock x:Name="CopyFeedback" Classes="subtle" VerticalAlignment="Center" />
             <Button Grid.Column="1" Classes="secondary" Content="Copiar" Click="OnCopyClick"

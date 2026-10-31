@@ -57,6 +57,14 @@ public partial class ProfileItemViewModel : ObservableObject
     /// <summary>Último resultado com falhas ou cancelado.</summary>
     public bool IsProblem => Status == ProfileStatusKind.Problem;
 
+    /// <summary>Se a tarefa tem agendamento ligado (ícone de relógio na barra lateral).</summary>
+    [ObservableProperty]
+    private bool _isScheduled;
+
+    /// <summary>Descrição do agendamento, para a dica do ícone.</summary>
+    [ObservableProperty]
+    private string _scheduleTip = string.Empty;
+
     /// <summary>
     /// Cria o item a partir da tarefa salva.
     /// </summary>
@@ -65,6 +73,16 @@ public partial class ProfileItemViewModel : ObservableObject
         Profile = profile;
         _name = profile.Name;
         RefreshFromLastRun();
+        RefreshSchedule();
+    }
+
+    /// <summary>
+    /// Atualiza o ícone e a dica do agendamento a partir da tarefa salva.
+    /// </summary>
+    public void RefreshSchedule()
+    {
+        IsScheduled = Profile.Schedule?.Enabled == true;
+        ScheduleTip = IsScheduled ? "Agendada: " + Profile.Schedule!.Describe() : string.Empty;
     }
 
     partial void OnNameChanged(string value)
