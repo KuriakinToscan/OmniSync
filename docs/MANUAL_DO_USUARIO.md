@@ -46,7 +46,7 @@ A área principal tem quatro telas:
    - a **lista de arquivos**, com busca por caminho. Para conflitos, a coluna Ação mostra a decisão atual;
    - o **painel de detalhes** do arquivo selecionado: tamanho e data nos dois lados (o mais recente fica destacado), o que vai acontecer e, para conflitos, a decisão;
    - a **barra inferior** resume o plano (copiar, substituir, manter, sem decisão, mover para `lixo/`) e traz **Exportar CSV** e **Revisar e sincronizar** (Ctrl+Enter).
-3. **Execução**: percentual (fica em no máximo 99% enquanto houver arquivo por terminar; durante um conflito aparece a faixa **Aguardando sua decisão**), volume e arquivos processados, velocidade, tempo restante, andamento por fase (cópias, conflitos, `lixo/`), arquivo atual e o registro da atividade, com filtro **Avisos e erros**. **Cancelar** (Esc) interrompe sem deixar arquivo parcial.
+3. **Execução**: percentual (fica em no máximo 99% enquanto houver arquivo por terminar; durante um conflito aparece a faixa **Aguardando sua decisão**), **Volume** (soma dos bytes já gravados e total a gravar) e **Arquivos** processados, velocidade, tempo restante, andamento por fase (cópias, com o volume total a copiar; conflitos; `lixo/`), arquivo atual e o registro da atividade, com filtro **Avisos e erros**. **Cancelar** (Esc) interrompe sem deixar arquivo parcial.
 4. **Resultado**: balanço (copiados, substituídos, mantidos, movidos para `lixo/`, falhas), a lista do que não foi feito com o motivo, **Tentar de novo** e atalhos para `lixo/`, `old/`, relatório CSV e **Analisar novamente** (F5). **Ver arquivos** volta à lista com o estado de cada item.
 
 Em janelas com menos de 1.240 px de largura, a árvore de pastas é ocultada para dar espaço à lista e ao painel de detalhes.

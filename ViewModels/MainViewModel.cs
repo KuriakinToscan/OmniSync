@@ -48,6 +48,7 @@ public partial class MainViewModel : ViewModelBase
 
     // Contadores da execução em andamento, por fase
     private int _runCopyTotal, _runCopyDone, _runReplaceTotal, _runReplaceDone, _runTrashTotal, _runTrashDone;
+    private long _runCopyBytes;
 
     /// <summary>
     /// Delegate injetado pela View para abertura do seletor nativo de pastas do sistema operacional.
@@ -880,7 +881,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void UpdatePhaseTexts()
     {
-        CopyPhaseText = _runCopyTotal == 0 ? "Nada a copiar" : $"{_runCopyDone:N0} de {_runCopyTotal:N0}";
+        CopyPhaseText = _runCopyTotal == 0 ? "Nada a copiar" : $"{_runCopyDone:N0} de {_runCopyTotal:N0} · {SyncItem.FormatBytes(_runCopyBytes)}";
         ReplacePhaseText = _runReplaceTotal == 0 ? "Nenhum conflito" : $"{_runReplaceDone:N0} de {_runReplaceTotal:N0} decididos";
         TrashPhaseText = _runTrashTotal == 0 ? "Nada a mover" : $"{_runTrashDone:N0} de {_runTrashTotal:N0}";
     }
@@ -1362,6 +1363,7 @@ public partial class MainViewModel : ViewModelBase
 
         var pending = Items.Where(i => !i.IsProcessed && !i.IsIdentical).ToList();
         _runCopyTotal = pending.Count(i => i.IsNew);
+        _runCopyBytes = pending.Where(i => i.IsNew).Sum(i => i.SourceSize);
         _runReplaceTotal = pending.Count(i => i.IsConflict);
         _runTrashTotal = pending.Count(i => i.IsOrphan);
         _runCopyDone = _runReplaceDone = _runTrashDone = 0;
@@ -1379,8 +1381,8 @@ public partial class MainViewModel : ViewModelBase
         StatusMessage = "Sincronização em andamento...";
         OverallProgress = 0;
         ProgressPercentText = "0%";
-        ProcessedBytesText = "—";
-        ProcessedFilesText = "—";
+        ProcessedBytesText = "Volume: —";
+        ProcessedFilesText = "Arquivos: —";
         SpeedFormatted = "—";
         EtaFormatted = "—";
         CurrentOperationText = "Preparando...";
@@ -1396,8 +1398,8 @@ public partial class MainViewModel : ViewModelBase
             ProgressPercentText = $"{percent:0}%";
             SpeedFormatted = report.SpeedFormatted;
             EtaFormatted = report.EtaFormatted;
-            ProcessedFilesText = $"{report.ProcessedFiles:N0} de {report.TotalFiles:N0} arquivos";
-            ProcessedBytesText = $"{SyncItem.FormatBytes(report.ProcessedBytes)} de {SyncItem.FormatBytes(report.TotalBytes)}";
+            ProcessedFilesText = $"Arquivos: {report.ProcessedFiles:N0} de {report.TotalFiles:N0}";
+            ProcessedBytesText = $"Volume: {SyncItem.FormatBytes(report.ProcessedBytes)} de {SyncItem.FormatBytes(report.TotalBytes)}";
             CurrentOperationText = !string.IsNullOrEmpty(report.CurrentFileName)
                 ? report.CurrentFileName
                 : "Finalizando...";
