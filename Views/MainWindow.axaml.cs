@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -9,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using OmniSync.Models;
+using OmniSync.Services;
 using OmniSync.ViewModels;
 
 namespace OmniSync.Views;
@@ -26,6 +28,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // Ao voltar para a janela, traz as execuções feitas pelo agendador enquanto ela estava em segundo plano
+        Activated += (_, _) => (DataContext as MainViewModel)?.RefreshRunsFromHistory();
     }
 
     /// <summary>
@@ -44,6 +48,8 @@ public partial class MainWindow : Window
             vm.SelectTrashEntriesAsync = SelectTrashEntriesAsync;
             vm.ConfirmAsync = (title, message, confirmText) => MessageDialog.ShowAsync(this, title, message, confirmText);
             vm.NotifyAsync = (title, message) => MessageDialog.InformAsync(this, title, message);
+            vm.EnsureInstalledAsync = async (state, reason) =>
+                await InstallWindow.ShowAsync(this, state, reason, allowDismiss: false) == InstallChoice.Installed;
             vm.PropertyChanged += (_, args) =>
             {
                 // Lista nova (filtro, pasta ou busca): volta ao topo, sem deixar a 1ª linha sob o cabeçalho
@@ -70,6 +76,58 @@ public partial class MainWindow : Window
         if (change.Property == ClientSizeProperty)
         {
             Classes.Set("compact", ClientSize.Width < CompactWidth);
+        }
+    }
+
+    /// <summary>
+    /// Verificações ao abrir (fora do autoteste): oferta de instalação na pasta fixa, quando o OmniSync roda de
+    /// outro lugar, e conferência dos agendamentos salvos.
+    /// </summary>
+    public async Task RunStartupChecksAsync()
+    {
+        if (DataContext is not MainViewModel vm) return;
+        try
+        {
+            var state = await Task.Run(AppInstaller.GetState);
+            bool offer = state == InstallState.InstalledDifferent || state == InstallState.NotInstalled && !vm.InstallOfferDismissed;
+            if (offer)
+            {
+                var choice = await InstallWindow.ShowAsync(this, state, null, allowDismiss: true);
+                if (choice == InstallChoice.Never)
+                {
+                    vm.DismissInstallOffer();
+                }
+                else if (choice == InstallChoice.Installed &&
+                         await MessageDialog.ShowAsync(this, "OmniSync instalado",
+                             $"O OmniSync está em {AppInstaller.InstallDirectory}. Abrir a versão instalada agora? Esta janela será fechada. " +
+                             "Depois, o arquivo baixado pode ser apagado.",
+                             "Abrir a instalada"))
+                {
+                    vm.SaveSettings();
+                    if (AppInstaller.LaunchInstalled())
+                    {
+                        Close();
+                        return;
+                    }
+                }
+            }
+
+            var problems = await vm.VerifySchedulesAsync();
+            if (problems.Count > 0)
+            {
+                var lines = string.Join("; ", problems.Select(p => $"\"{p.Item.Name}\": {p.Problem}"));
+                if (await MessageDialog.ShowAsync(this, "Agendamento precisa de correção",
+                        $"{(problems.Count == 1 ? "Um agendamento não vai rodar" : $"{problems.Count} agendamentos não vão rodar")}: {lines}. " +
+                        "Registrar de novo, apontando para o OmniSync instalado?",
+                        "Corrigir"))
+                {
+                    await vm.FixSchedulesAsync(problems.Select(p => p.Item));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Program.LogCrash("StartupChecks", ex);
         }
     }
 

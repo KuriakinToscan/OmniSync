@@ -22,6 +22,8 @@ public sealed class CliRunner
     private readonly ISyncEngine _engine;
     private readonly TextWriter _output;
     private readonly string _settingsPath;
+    private readonly string _historyDirectory;
+    private readonly string _lockDirectory;
 
     /// <summary>
     /// Cria o executor.
@@ -34,7 +36,17 @@ public sealed class CliRunner
         _engine = engine;
         _output = TextWriter.Synchronized(output);
         _settingsPath = settingsPath;
+        // Histórico e travas ficam ao lado do settings.json (a pasta de dados; nos testes, uma pasta temporária)
+        var dataDirectory = Path.GetDirectoryName(Path.GetFullPath(settingsPath))!;
+        _historyDirectory = Path.Combine(dataDirectory, "history");
+        _lockDirectory = Path.Combine(dataDirectory, "locks");
     }
+
+    /// <summary>
+    /// Aviso a exibir ao fim de uma execução agendada, ou <c>null</c> quando não há o que avisar
+    /// (ou a execução não foi agendada).
+    /// </summary>
+    public CliNotification? Notification { get; private set; }
 
     /// <summary>
     /// Executa o comando.
@@ -65,6 +77,7 @@ public sealed class CliRunner
         catch (Exception ex)
         {
             Report($"[ERRO CRÍTICO] {ErrorMessages.ForLog(ex)}", alwaysShow: true);
+            Notify(command, "OmniSync: erro na execução agendada", $"{ErrorMessages.Translate(ex)} Detalhes no log.", problem: true);
             return CliExitCode.UnexpectedError;
         }
     }
@@ -98,31 +111,55 @@ public sealed class CliRunner
         if (profile == null)
         {
             _output.WriteLine(lookupError);
-            return CliExitCode.InvalidInput;
-        }
-
-        if (string.IsNullOrWhiteSpace(profile.SourcePath) || string.IsNullOrWhiteSpace(profile.DestinationPath))
-        {
-            _output.WriteLine($"A tarefa \"{profile.Name}\" não tem origem e destino definidos. Complete-a pela interface.");
-            return CliExitCode.InvalidInput;
-        }
-
-        var source = profile.SourcePath.Trim();
-        var dest = PathHelper.ResolveEffectiveDestination(source, profile.DestinationPath, profile.UseSourceFolderNameInDestination);
-        var problem = PathHelper.DescribePairProblem(source, dest);
-        if (problem != null)
-        {
-            _output.WriteLine(problem);
-            return CliExitCode.InvalidInput;
-        }
-        if (!Directory.Exists(source))
-        {
-            _output.WriteLine($"A origem não existe ou não está acessível: {source}");
+            Notify(command, "Agendamento do OmniSync não executado", lookupError!, problem: true);
             return CliExitCode.InvalidInput;
         }
 
         bool run = command.Action == CliAction.Run;
-        Report($"[CLI] {(run ? "Sincronizando" : "Analisando")} a tarefa \"{profile.Name}\": {source} -> {dest}", alwaysShow: true);
+        var started = DateTime.UtcNow;
+        var stopwatch = Stopwatch.StartNew();
+        RunRecord NewRecord(string outcome, string summary) => new()
+        {
+            StartedUtc = started,
+            Duration = stopwatch.Elapsed,
+            Scheduled = command.Scheduled,
+            AnalyzeOnly = !run,
+            Outcome = outcome,
+            Summary = summary
+        };
+
+        string? invalid = null;
+        var source = profile.SourcePath.Trim();
+        var dest = string.Empty;
+        if (string.IsNullOrWhiteSpace(profile.SourcePath) || string.IsNullOrWhiteSpace(profile.DestinationPath))
+        {
+            invalid = $"A tarefa \"{profile.Name}\" não tem origem e destino definidos. Complete-a pela interface.";
+        }
+        else
+        {
+            dest = PathHelper.ResolveEffectiveDestination(source, profile.DestinationPath, profile.UseSourceFolderNameInDestination);
+            invalid = PathHelper.DescribePairProblem(source, dest)
+                      ?? (Directory.Exists(source) ? null : $"A origem não existe ou não está acessível: {source}");
+        }
+        if (invalid != null)
+        {
+            _output.WriteLine(invalid);
+            RunHistory.Append(profile.Id, NewRecord("erro", invalid), _historyDirectory);
+            Notify(command, $"{profile.Name}: não executada", invalid, problem: true);
+            return CliExitCode.InvalidInput;
+        }
+
+        // Só a sincronização precisa de exclusividade; analisar apenas lê
+        using var taskLock = run ? TaskLock.TryAcquire(profile.Id, _lockDirectory) : null;
+        if (run && taskLock == null)
+        {
+            const string busy = "A tarefa já está sendo sincronizada (pela interface ou por outro agendamento). Nada foi feito.";
+            Report($"[AVISO] {busy}", alwaysShow: true);
+            RunHistory.Append(profile.Id, NewRecord("ocupado", busy), _historyDirectory);
+            return CliExitCode.AlreadyRunning;
+        }
+
+        Report($"[CLI] {(run ? "Sincronizando" : "Analisando")} a tarefa \"{profile.Name}\"{(command.Scheduled ? " (agendada)" : "")}: {source} -> {dest}", alwaysShow: true);
 
         var logger = new CliLogger(this, command.Verbose);
         var options = new ScanOptions
@@ -141,22 +178,40 @@ public sealed class CliRunner
         int replaceCount = ApplyConflictPolicy(items, command.ConflictPolicy);
         WritePlanSummary(items, replaceCount, command.ConflictPolicy);
 
+        int news = items.Count(i => i.IsNew);
+        int conflicts = items.Count(i => i.IsConflict);
+        int orphans = items.Count(i => i.IsOrphan);
+        int pending = news + conflicts + orphans;
+        string pendingText = $"{PtText.Count(news, "novo", "novos")}, {PtText.Count(conflicts, "conflito", "conflitos")}, {orphans:N0} para lixo/";
+
         if (!run)
         {
-            return await WriteReportAsync(command.ReportPath, items) ? CliExitCode.Success : CliExitCode.Failures;
+            bool ok = await WriteReportAsync(command.ReportPath, items);
+            var record = NewRecord(ok ? "ok" : "falhas", pending == 0 ? "Nada a sincronizar" : pendingText);
+            record.PendingChanges = pending;
+            RunHistory.Append(profile.Id, record, _historyDirectory);
+            if (pending > 0)
+            {
+                Notify(command, $"{profile.Name}: há alterações para sincronizar",
+                    $"{pendingText}. Abra o OmniSync para revisar e sincronizar.", problem: false);
+            }
+            return ok ? CliExitCode.Success : CliExitCode.Failures;
         }
 
-        int orphans = items.Count(i => i.IsOrphan);
         if (SyncSafety.IsMassOrphan(orphans, scan.DestinationFileCount))
         {
-            Report($"[ERRO] Sincronização abortada: {PtText.Count(orphans, "arquivo iria", "arquivos iriam")} para lixo/ " +
-                   $"de {scan.DestinationFileCount:N0} no destino (remoção em massa). Nada foi alterado. " +
-                   "Confira o destino da tarefa e, se estiver certo, sincronize pela interface.", alwaysShow: true);
+            var message = $"Sincronização abortada: {PtText.Count(orphans, "arquivo iria", "arquivos iriam")} para lixo/ " +
+                          $"de {scan.DestinationFileCount:N0} no destino (remoção em massa). Nada foi alterado. " +
+                          "Confira o destino da tarefa e, se estiver certo, sincronize pela interface.";
+            Report($"[ERRO] {message}", alwaysShow: true);
             await WriteReportAsync(command.ReportPath, items);
+            var aborted = NewRecord("abortado", "Abortada: remoção em massa, nada alterado");
+            aborted.PendingChanges = pending;
+            RunHistory.Append(profile.Id, aborted, _historyDirectory);
+            Notify(command, $"{profile.Name}: sincronização abortada", message, problem: true);
             return CliExitCode.MassRemovalAborted;
         }
 
-        var stopwatch = Stopwatch.StartNew();
         SyncResult? result = null;
         bool cancelled = false;
         try
@@ -181,12 +236,20 @@ public sealed class CliRunner
 
         if (cancelled)
         {
+            RunHistory.Append(profile.Id, NewRecord("interrompido", "Interrompida; nenhum arquivo parcial no destino"), _historyDirectory);
             Report("Interrompido. Nenhum arquivo parcial ficou no destino.", alwaysShow: true);
             return CliExitCode.Cancelled;
         }
 
+        var done = NewRecord(result!.HasFailures ? "falhas" : "ok", result.Summary);
+        done.Copied = result.Copied;
+        done.Replaced = result.Replaced;
+        done.Trashed = result.Trashed;
+        done.Failed = result.Failed;
+        RunHistory.Append(profile.Id, done, _historyDirectory);
+
         _output.WriteLine();
-        _output.WriteLine($"Resultado em {SyncEngine.FormatElapsed(stopwatch.Elapsed)}: {result!.Summary}.");
+        _output.WriteLine($"Resultado em {SyncEngine.FormatElapsed(stopwatch.Elapsed)}: {result.Summary}.");
         foreach (var failed in result.FailedItems.Take(20))
         {
             _output.WriteLine($"  Falhou: {failed.RelativePath} ({failed.StatusMessage})");
@@ -197,7 +260,28 @@ public sealed class CliRunner
         }
         _output.WriteLine($"Log: {FileLogService.CurrentLogFile}");
 
+        if (result.HasFailures)
+        {
+            Notify(command, $"{profile.Name}: sincronizada com {PtText.Count(result.Failed, "falha", "falhas")}",
+                $"{result.Summary}. Abra o OmniSync para ver os arquivos que falharam.", problem: true);
+        }
+        else if (result.Copied + result.Replaced + result.Trashed > 0)
+        {
+            Notify(command, $"{profile.Name}: sincronizada", result.Summary + ".", problem: false);
+        }
+
         return result.HasFailures || !reportOk ? CliExitCode.Failures : CliExitCode.Success;
+    }
+
+    /// <summary>
+    /// Prepara o aviso exibido ao fim de uma execução agendada (ignorado fora do agendamento).
+    /// </summary>
+    private void Notify(CliCommand command, string title, string message, bool problem)
+    {
+        if (command.Scheduled)
+        {
+            Notification = new CliNotification(title, message, problem);
+        }
     }
 
     /// <summary>
@@ -381,3 +465,11 @@ public sealed class CliRunner
         }
     }
 }
+
+/// <summary>
+/// Aviso ao usuário ao fim de uma execução agendada.
+/// </summary>
+/// <param name="Title">Título (ex.: "Campo: sincronizada").</param>
+/// <param name="Message">Texto do aviso.</param>
+/// <param name="IsProblem">Se é um problema (falhas, abortado, erro) e merece destaque.</param>
+public sealed record CliNotification(string Title, string Message, bool IsProblem);

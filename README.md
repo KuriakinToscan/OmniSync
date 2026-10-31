@@ -22,6 +22,7 @@ Diferente de ferramentas tradicionais que apagam ou sobrescrevem arquivos irreve
 7. **Auditoria**: log diário completo em arquivo, janela **Registro** com filtro e cópia, e exportação do plano/resultado em CSV (cabeçalho ASCII, com colunas de código). Erros do sistema aparecem em português; a mensagem original fica no log.
 8. **Tarefas salvas**: cada combinação de origem, destino e opções fica salva na barra lateral, com o estado da última execução. Trocar de tarefa carrega a configuração e descarta o plano anterior.
 9. **Decisões seguras**: nenhum conflito vem pré-selecionado; decisões tomadas voltam após uma nova análise se os arquivos não mudaram; substituir uma versão mais nova do destino exige confirmação própria na revisão; origem e destino iguais ou aninhados são apontados na hora.
+10. **Agendamento e instalação**: cada tarefa pode rodar sozinha (todo dia, em dias da semana ou ao entrar no sistema), pelo Agendador de Tarefas do Windows ou pelo systemd no Linux, sincronizando ou só analisando e avisando. Ao abrir, o OmniSync oferece instalar-se numa pasta fixa do usuário, com atalhos na área de trabalho e no menu Iniciar.
 
 ### Interface
 
@@ -44,7 +45,7 @@ As tarefas salvas também rodam sem janela e sem perguntas, com código de saíd
 .\OmniSync.exe --sincronizar "Volume" --relatorio C:\Temp\volume.csv | Out-Host ; $LASTEXITCODE
 ```
 
-Conflitos sem decisão mantêm o destino (ou, com `--conflitos origem-mais-nova`, só substituem quando a origem é mais nova) e remoção em massa aborta sem alterar nada. Detalhes no [manual](docs/MANUAL_DO_USUARIO.md#9-linha-de-comando-sem-janela).
+Conflitos sem decisão mantêm o destino (ou, com `--conflitos origem-mais-nova`, só substituem quando a origem é mais nova) e remoção em massa aborta sem alterar nada. Detalhes no [manual](docs/MANUAL_DO_USUARIO.md#9-linha-de-comando-sem-janela). O agendamento usa esses mesmos comandos; veja [Instalação e Agendamento](docs/MANUAL_DO_USUARIO.md#10-instalação-e-agendamento).
 
 ---
 
@@ -95,12 +96,13 @@ chmod +x publish/linux-x64/OmniSync
 ```text
 OmniSync/
 ├── Assets/                     # Ícone do aplicativo (PNG e ICO)
-├── Cli/                        # Modo de linha de comando (--listar, --analisar, --sincronizar)
+├── Cli/                        # Modo de linha de comando (--listar, --analisar, --sincronizar, --agendado)
 ├── Models/                     # Modelos de dados e enums de domínio
 │   ├── SyncActionType.cs       # Tipos de ação, resolução e direção do conflito
 │   ├── SyncContracts.cs        # Opções/resultado da varredura, atualizações de item, balanço, lixo/
 │   ├── SyncItem.cs             # Representação observável de cada arquivo analisado
 │   ├── SyncProfile.cs          # Tarefa salva: origem, destino, opções e última execução
+│   ├── SyncSchedule.cs         # Agendamento da tarefa (frequência, horário, modo, conflitos)
 │   └── SyncProgressReport.cs   # Telemetria de progresso, velocidade (MB/s) e ETA
 ├── Services/                   # Regras de negócio, sem dependência da interface
 │   ├── ISyncEngine.cs          # Interface do motor de sincronização
@@ -111,9 +113,15 @@ OmniSync/
 │   ├── SettingsService.cs      # Tarefas salvas (JSON) e migração do formato 1.1
 │   ├── ReportExporter.cs       # Exportação CSV
 │   ├── SyncSafety.cs           # Critério de remoção em massa (interface e linha de comando)
+│   ├── Scheduling/             # Agendador do sistema: Windows (schtasks) e Linux (systemd), verificação
+│   ├── RunHistory.cs           # Histórico de execuções por tarefa (history/<id>.json)
+│   ├── TaskLock.cs             # Trava por tarefa (interface x agendamento)
+│   ├── AppInstaller.cs         # Instalação na pasta fixa do usuário
+│   ├── ShortcutService.cs      # Atalhos na área de trabalho e no menu Iniciar
 │   └── AppPaths.cs             # Pasta de dados por usuário
 ├── ViewModels/                 # Camada MVVM de apresentação e comandos
 │   ├── MainViewModel.cs        # Tarefas, telas, análise, confirmação, execução, filtros, restauração
+│   ├── MainViewModel.Schedule.cs # Cartão de agendamento, verificação e histórico
 │   ├── ProfileItemViewModel.cs # Item da barra lateral de tarefas
 │   ├── FolderTree.cs           # Árvore "pastas com alterações"
 │   ├── ConflictDialogViewModel.cs / ConfirmSyncViewModel.cs / RestoreViewModel.cs
@@ -122,6 +130,8 @@ OmniSync/
 ├── Views/                      # Interfaces gráficas declarativas (Avalonia XAML)
 │   ├── MainWindow.axaml(.cs)   # Janela principal
 │   ├── ConflictDialogWindow / ConfirmSyncWindow / RestoreWindow / MessageDialog
+│   ├── InstallWindow.cs        # Oferta de instalação com atalhos
+│   ├── NotificationWindow.cs   # Aviso ao fim de uma execução agendada
 │   ├── ProportionBar.cs        # Barra proporcional do resumo do plano
 │   └── Converters.cs
 ├── Styles/                     # Paleta claro/escuro, ícones vetoriais e estilos

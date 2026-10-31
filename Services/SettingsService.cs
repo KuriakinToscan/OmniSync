@@ -19,6 +19,11 @@ public sealed class AppSettings
     /// <summary>Tarefa selecionada na última sessão.</summary>
     public Guid? ActiveProfileId { get; set; }
 
+    /// <summary>
+    /// O usuário marcou "Não perguntar de novo" na oferta de instalar o OmniSync na pasta fixa.
+    /// </summary>
+    public bool InstallOfferDismissed { get; set; }
+
     /// <summary>Último diretório de Origem (formato 1.1, migrado para <see cref="Profiles"/>).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourcePath { get; set; }

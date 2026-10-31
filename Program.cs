@@ -86,6 +86,10 @@ public sealed class Program
             var runner = new CliRunner(new SyncEngine(), output, AppPaths.SettingsFile);
             var code = runner.RunAsync(command!, cts.Token).GetAwaiter().GetResult();
             FileLogService.Write($"[CLI] Código de saída: {(int)code} ({code})");
+            if (runner.Notification != null)
+            {
+                ShowNotification(runner.Notification);
+            }
             return (int)code;
         }
         catch (Exception ex)
@@ -98,6 +102,25 @@ public sealed class Program
         {
             output.Flush();
             FileLogService.Close();
+        }
+    }
+
+    /// <summary>
+    /// Exibe a janela de aviso de uma execução agendada e espera o usuário fechá-la (ou o tempo esgotar).
+    /// Sem sessão gráfica (ex.: timer do systemd sem DISPLAY), o aviso fica só no log.
+    /// </summary>
+    /// <param name="notification">Conteúdo do aviso.</param>
+    private static void ShowNotification(CliNotification notification)
+    {
+        FileLogService.Write($"[AVISO AO USUÁRIO] {notification.Title}: {notification.Message}");
+        try
+        {
+            App.PendingNotification = notification;
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(Array.Empty<string>());
+        }
+        catch (Exception ex)
+        {
+            FileLogService.Write($"[AVISO] Não foi possível exibir o aviso na tela: {ex.Message}");
         }
     }
 

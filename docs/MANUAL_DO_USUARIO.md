@@ -14,6 +14,7 @@ Manual do **OmniSync**, sincronizador visual de arquivos para **Windows e Linux*
 7. [Garantias de Segurança](#7-garantias-de-segurança)
 8. [Perguntas Frequentes e Solução de Problemas](#8-perguntas-frequentes-e-solução-de-problemas)
 9. [Linha de Comando (sem janela)](#9-linha-de-comando-sem-janela)
+10. [Instalação e Agendamento](#10-instalação-e-agendamento)
 
 ---
 
@@ -188,6 +189,7 @@ O nome da tarefa não diferencia maiúsculas nem acentos (`"volume"` encontra `V
 | 3 | Argumento, tarefa ou caminho inválido; nada foi alterado |
 | 4 | Interrompido (Ctrl+C) |
 | 5 | Erro inesperado (detalhes no log) |
+| 6 | A tarefa já está sendo sincronizada (pela interface ou por outro agendamento); nada foi feito |
 
 **No PowerShell (Windows)**, acrescente `| Out-Host` para o terminal esperar o fim e mostrar a saída; o código fica em `$LASTEXITCODE`:
 
@@ -195,4 +197,41 @@ O nome da tarefa não diferencia maiúsculas nem acentos (`"volume"` encontra `V
 .\OmniSync.exe --sincronizar "Volume" | Out-Host ; $LASTEXITCODE
 ```
 
-Sem `| Out-Host` o comando funciona, mas o PowerShell volta ao prompt antes de o OmniSync terminar (o executável é um aplicativo de janela). Todas as linhas vão também para o log diário (`%LOCALAPPDATA%\OmniSync\logs`), e a execução aparece na barra lateral da interface como "Sincronizado hoje, HH:MM". Se a interface estiver aberta durante uma execução pela linha de comando, esse registro pode ser sobrescrito quando a interface salvar suas configurações.
+Sem `| Out-Host` o comando funciona, mas o PowerShell volta ao prompt antes de o OmniSync terminar (o executável é um aplicativo de janela). Todas as linhas vão também para o log diário (`%LOCALAPPDATA%\OmniSync\logs`), e a execução aparece na barra lateral da interface como "Sincronizado hoje, HH:MM" (com a interface aberta, ao voltar para a janela).
+
+A opção `--agendado` é usada pelo agendamento (seção 10): marca a execução como agendada no histórico e, ao fim, mostra uma janela de aviso quando há algo a avisar.
+
+---
+
+## 10. Instalação e Agendamento
+
+### Instalação na pasta fixa
+O OmniSync é um executável único, sem instalador. Quando é aberto fora da pasta fixa do usuário (`%LOCALAPPDATA%\Programs\OmniSync` no Windows, `~/.local/share/Programs/OmniSync` no Linux), ele oferece copiar-se para lá e criar os atalhos na **área de trabalho** e no **menu Iniciar** (no Linux, no menu de aplicativos). Não precisa de administrador.
+
+- **Instalar**: copia o executável, cria os atalhos marcados e oferece abrir a versão instalada (a janela atual fecha). Depois disso, o arquivo baixado pode ser apagado.
+- **Agora não**: pergunta de novo na próxima abertura. Com **Não perguntar de novo**, a oferta deixa de aparecer.
+- **Nova versão**: ao abrir um executável diferente do instalado (por exemplo, uma versão baixada depois), o OmniSync oferece **Atualizar** a cópia da pasta fixa. Feche a versão instalada antes, se estiver aberta.
+
+O agendamento sempre chama o executável da pasta fixa, que não muda quando você baixa uma nova versão. Por isso, ligar um agendamento exige a instalação.
+
+### Agendar uma tarefa
+No cartão **Agendamento**, na tela de configuração da tarefa:
+
+1. Ligue a chave **Ligado**.
+2. **O que fazer**: *Sincronizar* (sem perguntas) ou *Só analisar e avisar* (não altera nada; avisa quando há alterações pendentes).
+3. **Quando**: *Todo dia*, *Dias da semana* (marque os dias) ou *Ao entrar no sistema* (5 minutos após o logon).
+4. **Horário**, para as opções diária e semanal.
+5. **Em conflito, substituir quando a origem for mais nova**: desmarcado, o destino é sempre mantido. Marcado, a versão anterior vai para `old/`. Destino mais novo nunca é substituído.
+6. Clique em **Salvar agendamento**. Para desligar, desligue a chave e salve.
+
+O agendamento é registrado no **Agendador de Tarefas do Windows** (pasta `OmniSync`) ou, no Linux, como timer do systemd do usuário. Ele roda com o OmniSync fechado, enquanto você estiver com a sessão iniciada, inclusive na bateria. Se o computador estiver desligado no horário, a execução acontece assim que possível. A tarefa agendada ganha um ícone de relógio na barra lateral.
+
+As regras sem perguntas são as da linha de comando: conflitos seguem a opção do cartão, e remoção em massa **aborta sem alterar nada**. Se a interface estiver sincronizando a mesma tarefa, a execução agendada não faz nada (código 6), e vice-versa.
+
+### Aviso ao fim
+Ao terminar, uma janela pequena aparece no canto inferior direito quando há algo a dizer: alterações sincronizadas, alterações pendentes (modo *Só analisar*), falhas, sincronização abortada ou erro. Execuções sem nada a fazer não mostram aviso. **Abrir OmniSync** abre a interface. Avisos de problema ficam na tela até você fechar; os demais fecham sozinhos após 30 s.
+
+### Histórico e verificação
+O cartão mostra a próxima execução, a última execução agendada e as 5 execuções mais recentes (manuais e agendadas). O histórico guarda as 30 últimas por tarefa.
+
+Ao abrir, o OmniSync confere cada agendamento ligado. Se o executável registrado foi apagado ou a entrada foi removida do Agendador de Tarefas, ele avisa e oferece **Corrigir** (registrar de novo apontando para a versão instalada). Excluir uma tarefa remove também o seu agendamento e o histórico.

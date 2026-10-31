@@ -205,7 +205,18 @@ Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou
 - `CliCommand`: interpreta `--listar`, `--analisar`, `--sincronizar`, `--ajuda` (com sinônimos em inglês) e as opções `--conflitos`, `--relatorio`, `--detalhado`; argumento desconhecido gera erro e código 3.
 - `CliRunner`: carrega `settings.json`, encontra a tarefa (nome sem caixa nem acentos, ou `Id`), resolve o destino efetivo com `PathHelper.ResolveEffectiveDestination`, recusa pares inválidos (`DescribePairProblem`), analisa com as opções da tarefa e aplica a política de conflitos (`ApplyConflictPolicy`: `Ignore` por padrão; `Replace` só com `origem-mais-nova` e `ConflictDirection.SourceNewer`). A proteção de remoção em massa (`SyncSafety.IsMassOrphan`, o mesmo critério da confirmação da interface) aborta antes de `ExecuteSyncAsync`. Ao fim, relê `settings.json` e grava só a última execução da tarefa.
 - `ConsoleHost`: o executável Windows é `WinExe`. Se a saída padrão já está redirecionada (pipe ou arquivo), escreve nela; senão, `AttachConsole(ATTACH_PARENT_PROCESS)`. A codificação segue `GetConsoleOutputCP` (ou `GetOEMCP` sem console), via `CodePagesEncodingProvider`, para os acentos saírem certos no console e no PowerShell. Sem console nem redirecionamento (Agendador de Tarefas), a saída é descartada e fica o log diário.
-- Códigos de saída: `CliExitCode` (0 sem falhas, 1 falhas, 2 remoção em massa, 3 entrada inválida, 4 interrompido, 5 erro inesperado).
+- Códigos de saída: `CliExitCode` (0 sem falhas, 1 falhas, 2 remoção em massa, 3 entrada inválida, 4 interrompido, 5 erro inesperado, 6 tarefa já em execução).
+- `--agendado` (`CliCommand.Scheduled`): grava o histórico como agendado e preenche `CliRunner.Notification` quando há o que avisar. `Program` então inicia o Avalonia só com a `NotificationWindow` (`App.PendingNotification`), sem a janela principal.
+
+### 4.10. Agendamento, histórico e instalação
+- **Modelo**: `SyncSchedule` (em `SyncProfile.Schedule`, dentro do `settings.json`): ligado, modo (`Sync`/`AnalyzeAndNotify`), frequência (`Daily`/`Weekly`/`AtLogon`), hora, dias, política de conflitos e `RegisteredExecutable`. `BuildArguments` usa o **id** da tarefa (renomear não quebra o agendamento).
+- **Agendador do sistema** (`Services/Scheduling`): `ISystemScheduler` com `WindowsTaskScheduler` e `SystemdTimerScheduler`, escolhido em `SystemScheduler.Current`.
+  - Windows: `schtasks /Create /TN \OmniSync\<id> /XML <arquivo> /F`, com XML do esquema 1.2 em UTF-16 com BOM. `InteractiveToken` + `LeastPrivilege` (sem senha nem elevação), `DisallowStartIfOnBatteries=false`, `StopIfGoingOnBatteries=false`, `StartWhenAvailable=true`, `MultipleInstancesPolicy=IgnoreNew`, limite de 72 h. Logon com `Delay=PT5M`. Saída do `schtasks` lida na página OEM.
+  - Linux: `~/.config/systemd/user/omnisync-<id>.service` (oneshot) e `.timer` (`OnCalendar`, `Persistent=true`; logon como `OnStartupSec=5min`), com `daemon-reload` e `enable --now`.
+  - `ScheduleHealth.Check`: executável registrado ausente ou entrada ausente no agendador. A interface verifica ao abrir e oferece registrar de novo.
+- **Histórico** (`RunHistory`): `history/<id>.json` na pasta de dados, 30 registros por tarefa, gravação atômica. Fica fora do `settings.json` porque a interface aberta regrava esse arquivo inteiro. A interface grava as execuções manuais e, ao ser ativada, traz para as tarefas as execuções feitas fora dela (`RefreshRunsFromHistory`).
+- **Trava** (`TaskLock`): `locks/<id>.lock` aberto com `FileShare.None` e `DeleteOnClose`. A sincronização pela interface e pela linha de comando a obtêm; o sistema a libera mesmo se o processo morrer.
+- **Instalação** (`AppInstaller`, `ShortcutService`, `InstallWindow`): cópia para `%LOCALAPPDATA%\Programs\OmniSync` (temporário + `File.Move` com substituição), comparação por SHA-256 para detectar outra versão, atalhos `.lnk` via `WScript.Shell` (COM tardio, sem dependência de compilação) ou `.desktop` no Linux (com `omnisync.png` gravado ao lado do executável). A oferta aparece ao abrir fora da pasta fixa e ao ligar um agendamento sem instalação.
 
 ---
 
@@ -219,7 +230,8 @@ Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou
 6. **[`Tests/InterfaceTests.cs`](../Tests/InterfaceTests.cs)**: busca sem acentos, ordem natural, tempos em ms, percentual limitado a 99% e concordância no resultado da restauração.
 7. **[`Tests/ReportAndErrorTests.cs`](../Tests/ReportAndErrorTests.cs)**: tradução de códigos Win32/errno e formato do CSV.
 8. **[`Tests/CliTests.cs`](../Tests/CliTests.cs)**: argumentos (válidos e inválidos), busca da tarefa sem acentos e por id, política de conflitos (destino mais novo nunca é substituído), sincronização de ponta a ponta com CSV e registro da última execução, análise sem alterações, aborto por remoção em massa, tarefa inexistente e origem ausente.
-9. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
+9. **[`Tests/ScheduleTests.cs`](../Tests/ScheduleTests.cs)**: próxima execução e descrição do agendamento, argumentos reinterpretados pela CLI, persistência no `settings.json`, XML do Agendador de Tarefas (gatilhos, bateria, privilégio, ação), units do systemd (aspas e `%`), integração real com o `schtasks` (só no Windows), saúde do agendamento, histórico (limite e arquivo corrompido), trava exclusiva, execução agendada (histórico, aviso, código 6, remoção em massa), estado e cópia da instalação e entrada `.desktop`.
+10. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
 
 ---
 
