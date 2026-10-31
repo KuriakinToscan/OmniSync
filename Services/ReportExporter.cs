@@ -61,11 +61,11 @@ public static class ReportExporter
     /// <summary>Código estável da ação.</summary>
     public static string ActionCode(SyncActionType action) => action switch
     {
-        SyncActionType.New => "new",
-        SyncActionType.Conflict => "conflict",
-        SyncActionType.OrphanTrash => "orphan",
-        SyncActionType.Identical => "identical",
-        _ => "unknown"
+        SyncActionType.New => "novo",
+        SyncActionType.Conflict => "conflito",
+        SyncActionType.OrphanTrash => "orfao",
+        SyncActionType.Identical => "identico",
+        _ => "desconhecido"
     };
 
     /// <summary>Decisão do conflito em português, como aparece na tela.</summary>
@@ -79,9 +79,9 @@ public static class ReportExporter
     /// <summary>Código estável da decisão do conflito.</summary>
     public static string DecisionCode(ConflictResolution resolution) => resolution switch
     {
-        ConflictResolution.Replace => "replace",
-        ConflictResolution.Ignore => "keep",
-        _ => "ask"
+        ConflictResolution.Replace => "substituir",
+        ConflictResolution.Ignore => "manter",
+        _ => "perguntar"
     };
 
     private static string Escape(string value)

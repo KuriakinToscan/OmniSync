@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
+using OmniSync.Services;
 
 namespace OmniSync.Models;
 
@@ -123,7 +124,13 @@ public sealed class SyncResult
     /// Resumo textual em uma linha.
     /// </summary>
     public string Summary =>
-        $"{Copied} copiados, {Replaced} substituídos, {Trashed} movidos p/ lixo/, {Ignored} ignorados, {Skipped} pulados, {Failed} falhas";
+        string.Join(", ",
+            PtText.Count(Copied, "copiado", "copiados"),
+            PtText.Count(Replaced, "substituído", "substituídos"),
+            PtText.Count(Trashed, "movido", "movidos") + " p/ lixo/",
+            PtText.Count(Ignored, "mantido no destino", "mantidos no destino"),
+            PtText.Count(Skipped, "pulado", "pulados"),
+            PtText.Count(Failed, "falha", "falhas"));
 }
 
 /// <summary>

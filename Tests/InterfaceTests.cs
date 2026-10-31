@@ -77,4 +77,14 @@ public class InterfaceTests
         Assert.Contains("2 falhas", many);
         Assert.DoesNotContain("mantido", many);
     }
+
+    /// <summary>
+    /// O resumo da execução concorda em número ("1 substituído", "2 falhas").
+    /// </summary>
+    [Fact]
+    public void SyncResultSummary_ShouldUseCorrectAgreement()
+    {
+        var result = new OmniSync.Models.SyncResult { Copied = 31, Replaced = 1, Trashed = 0, Ignored = 2 };
+        Assert.Equal("31 copiados, 1 substituído, 0 movidos p/ lixo/, 2 mantidos no destino, 0 pulados, 0 falhas", result.Summary);
+    }
 }

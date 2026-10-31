@@ -528,7 +528,7 @@ public class SyncEngineTests : IDisposable
         Assert.False(result.HasFailures);
         Assert.Equal(big, File.ReadAllBytes(Path.Combine(_destDir, "grande.bin")));
         Assert.Equal("versao da origem", File.ReadAllText(Path.Combine(_destDir, "conflito.txt")));
-        Assert.Contains(logs, l => l.StartsWith("Verificação: 2 cópia(s) conferida(s)"));
+        Assert.Contains(logs, l => l.StartsWith("Verificação: 2 cópias conferidas"));
         Assert.Empty(Directory.GetFiles(_destDir, "*" + PathHelper.TempSuffix, SearchOption.AllDirectories));
     }
 

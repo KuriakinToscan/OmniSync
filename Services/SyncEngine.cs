@@ -151,7 +151,7 @@ public class SyncEngine : ISyncEngine
                 if (caseDuplicates.Count > 0)
                 {
                     var examples = string.Join(", ", caseDuplicates.Take(3).Select(g => string.Join(" / ", g)));
-                    var warning = $"{caseDuplicates.Count} grupo(s) de arquivos na origem diferem apenas por maiúsculas/minúsculas " +
+                    var warning = $"{PtText.Count(caseDuplicates.Count, "grupo", "grupos")} de arquivos na origem {PtText.Pick(caseDuplicates.Count, "difere", "diferem")} apenas por maiúsculas/minúsculas " +
                                   $"(ex.: {examples}). Em destinos que não diferenciam maiúsculas (NTFS, exFAT, SMB) eles colidem; " +
                                   "o OmniSync não sobrescreve e reportará erro nesses itens.";
                     result.Warnings.Add(warning);
@@ -220,7 +220,7 @@ public class SyncEngine : ISyncEngine
 
             if (caseOnlyMatches > 0)
             {
-                logger?.Report($"Aviso: {caseOnlyMatches} arquivo(s) correspondem ao destino apenas ignorando maiúsculas/minúsculas e foram tratados como o mesmo arquivo.");
+                logger?.Report($"Aviso: {PtText.Count(caseOnlyMatches, "arquivo corresponde", "arquivos correspondem")} ao destino apenas ignorando maiúsculas/minúsculas e {PtText.Pick(caseOnlyMatches, "foi tratado", "foram tratados")} como o mesmo arquivo.");
             }
 
             // 4. Verificação profunda SHA-256 em paralelo limitado
@@ -299,7 +299,7 @@ public class SyncEngine : ISyncEngine
 
             if (protectedOrphans > 0)
             {
-                var warning = $"{protectedOrphans} arquivo(s) do destino não foram classificados como órfãos porque a pasta " +
+                var warning = $"{PtText.Count(protectedOrphans, "arquivo do destino não foi classificado como órfão", "arquivos do destino não foram classificados como órfãos")} porque a pasta " +
                               "correspondente na origem não pôde ser lida. Verifique permissões ou conexão e analise novamente.";
                 result.Warnings.Add(warning);
                 logger?.Report($"Aviso: {warning}");
@@ -481,7 +481,7 @@ public class SyncEngine : ISyncEngine
             var pruned = PathHelper.RemoveEmptyDirectories(directoriesToPrune, normalizedDestDir);
             if (pruned > 0)
             {
-                logger?.Report($"{pruned} pasta(s) vazia(s) removida(s) do destino após mover órfãos.");
+                logger?.Report($"{PtText.Count(pruned, "pasta vazia removida", "pastas vazias removidas")} do destino após mover órfãos.");
             }
 
             overallStopwatch.Stop();
@@ -491,12 +491,12 @@ public class SyncEngine : ISyncEngine
 
             if (VerifyCopies && result.Copied + result.Replaced > 0)
             {
-                logger?.Report($"Verificação: {result.Copied + result.Replaced} cópia(s) conferida(s) com a origem por SHA-256 antes de ocupar o lugar no destino.");
+                logger?.Report($"Verificação: {PtText.Count(result.Copied + result.Replaced, "cópia conferida", "cópias conferidas")} com a origem por SHA-256 antes de ocupar o lugar no destino.");
             }
 
             logger?.Report(result.HasFailures
-                ? $"[ERRO] Sincronização concluída com {result.Failed} falha(s): {result.Summary}."
-                : $"Sincronização concluída sem falhas: {result.Summary}.");
+                ? $"[ERRO] Sincronização concluída em {FormatElapsed(result.Duration)} com {PtText.Count(result.Failed, "falha", "falhas")}: {result.Summary}."
+                : $"Sincronização concluída em {FormatElapsed(result.Duration)}, sem falhas: {result.Summary}.");
             return result;
 
             // Função local para envio controlado (throttled) de relatórios de progresso à UI
@@ -666,7 +666,7 @@ public class SyncEngine : ISyncEngine
 
         if (result.UnreadableDirectories.Count > 0 && !isDestination)
         {
-            result.Warnings.Add($"{result.UnreadableDirectories.Count} pasta(s) da origem não puderam ser lidas e foram ignoradas (detalhes no log).");
+            result.Warnings.Add($"{PtText.Count(result.UnreadableDirectories.Count, "pasta da origem não pôde ser lida e foi ignorada", "pastas da origem não puderam ser lidas e foram ignoradas")} (detalhes no log).");
         }
 
         return result;
@@ -824,7 +824,7 @@ public class SyncEngine : ISyncEngine
     /// Copia um arquivo para um caminho temporário em blocos de 2 MB, com reporte contínuo de bytes,
     /// pré-alocação, verificação de tamanho final, preservação da data de modificação e retentativa
     /// apenas para falhas transitórias. Em qualquer falha definitiva ou cancelamento, o temporário é removido.
-    /// Com <paramref name="verify"/>, o temporário é gravado no disco (flush), relido e comparado por SHA-256
+    /// Com <paramref name="verify"/>, o temporário é relido pelo mesmo handle e comparado por SHA-256
     /// com os bytes lidos da origem; divergência conta como falha transitória (nova tentativa) e, se persistir,
     /// a operação falha sem tocar no arquivo do destino.
     /// </summary>
@@ -873,7 +873,8 @@ public class SyncEngine : ISyncEngine
                     await using var dstStream = new FileStream(tempFile, new FileStreamOptions
                     {
                         Mode = FileMode.CreateNew,
-                        Access = FileAccess.Write,
+                        // Leitura também: a verificação relê o temporário pelo mesmo handle, sem reabrir o arquivo
+                        Access = verify ? FileAccess.ReadWrite : FileAccess.Write,
                         Share = FileShare.None,
                         BufferSize = 0,
                         Options = FileOptions.Asynchronous,
@@ -895,25 +896,24 @@ public class SyncEngine : ISyncEngine
                             $"O arquivo de origem mudou durante a cópia ({bytesAddedInCurrentAttempt} de {expectedLength} bytes).");
                     }
 
-                    if (verify)
+                    if (sourceHash != null)
                     {
-                        // Garante que os dados saíram do buffer do processo e do sistema antes da releitura
-                        dstStream.Flush(flushToDisk: true);
+                        // Relê o que foi gravado pelo mesmo handle. Reabrir o arquivo custaria uma nova
+                        // inspeção do antivírus por arquivo, e forçar a gravação física (flush) não ajudaria:
+                        // a releitura viria do cache do sistema de qualquer forma.
+                        await dstStream.FlushAsync(cancellationToken);
+                        dstStream.Position = 0;
+                        var expected = sourceHash.GetHashAndReset();
+                        var actual = await SHA256.HashDataAsync(dstStream, cancellationToken);
+                        if (!CryptographicOperations.FixedTimeEquals(expected, actual))
+                        {
+                            throw new CopyVerificationException();
+                        }
                     }
                 }
                 finally
                 {
                     ArrayPool<byte>.Shared.Return(buffer);
-                }
-
-                if (sourceHash != null)
-                {
-                    var expected = sourceHash.GetHashAndReset();
-                    var actual = await ComputeSha256Async(tempFile, cancellationToken);
-                    if (!CryptographicOperations.FixedTimeEquals(expected, actual))
-                    {
-                        throw new CopyVerificationException();
-                    }
                 }
 
                 // Preserva a data/hora de modificação original para futuras comparações diferenciais

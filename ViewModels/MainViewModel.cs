@@ -48,6 +48,7 @@ public partial class MainViewModel : ViewModelBase
 
     // Contadores da execução em andamento, por fase
     private int _runCopyTotal, _runCopyDone, _runReplaceTotal, _runReplaceDone, _runTrashTotal, _runTrashDone;
+    private long _runCopyBytes;
 
     /// <summary>
     /// Delegate injetado pela View para abertura do seletor nativo de pastas do sistema operacional.
@@ -880,7 +881,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void UpdatePhaseTexts()
     {
-        CopyPhaseText = _runCopyTotal == 0 ? "Nada a copiar" : $"{_runCopyDone:N0} de {_runCopyTotal:N0}";
+        CopyPhaseText = _runCopyTotal == 0 ? "Nada a copiar" : $"{_runCopyDone:N0} de {_runCopyTotal:N0} · {SyncItem.FormatBytes(_runCopyBytes)}";
         ReplacePhaseText = _runReplaceTotal == 0 ? "Nenhum conflito" : $"{_runReplaceDone:N0} de {_runReplaceTotal:N0} decididos";
         TrashPhaseText = _runTrashTotal == 0 ? "Nada a mover" : $"{_runTrashDone:N0} de {_runTrashTotal:N0}";
     }
@@ -968,7 +969,23 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnActiveFilterChanged(ItemFilter value) => ApplyFilter();
 
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value)
+    {
+        ApplyFilter();
+        OnPropertyChanged(nameof(HasSearchText));
+        ClearSearchCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Indica se há texto na busca (mostra o botão de limpar).
+    /// </summary>
+    public bool HasSearchText => !string.IsNullOrEmpty(SearchText);
+
+    /// <summary>
+    /// Limpa a busca (botão X da caixa de busca ou Esc dentro dela).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasSearchText))]
+    private void ClearSearch() => SearchText = string.Empty;
 
     partial void OnSelectedFolderChanged(FolderNode? value) => ApplyFilter();
 
@@ -1266,7 +1283,7 @@ public partial class MainViewModel : ViewModelBase
             SelectedItem = null;
 
             StatusMessage = $"Análise concluída: {NewCount} novos, {ConflictCount} conflitos, {TrashCount} órfãos p/ lixo/, {IdenticalCount} idênticos" +
-                            (scan.Warnings.Count > 0 ? $" · {scan.Warnings.Count} aviso(s)." : ".");
+                            (scan.Warnings.Count > 0 ? $" · {PtText.Count(scan.Warnings.Count, "aviso", "avisos")}." : ".");
             CurrentOperationText = "Pronto para sincronizar.";
             SelectedProfile?.ShowPlanReady(NewCount + ConflictCount + TrashCount, AskDecisionCount);
         }
@@ -1346,6 +1363,7 @@ public partial class MainViewModel : ViewModelBase
 
         var pending = Items.Where(i => !i.IsProcessed && !i.IsIdentical).ToList();
         _runCopyTotal = pending.Count(i => i.IsNew);
+        _runCopyBytes = pending.Where(i => i.IsNew).Sum(i => i.SourceSize);
         _runReplaceTotal = pending.Count(i => i.IsConflict);
         _runTrashTotal = pending.Count(i => i.IsOrphan);
         _runCopyDone = _runReplaceDone = _runTrashDone = 0;
@@ -1363,8 +1381,8 @@ public partial class MainViewModel : ViewModelBase
         StatusMessage = "Sincronização em andamento...";
         OverallProgress = 0;
         ProgressPercentText = "0%";
-        ProcessedBytesText = "—";
-        ProcessedFilesText = "—";
+        ProcessedBytesText = "Volume: —";
+        ProcessedFilesText = "Arquivos: —";
         SpeedFormatted = "—";
         EtaFormatted = "—";
         CurrentOperationText = "Preparando...";
@@ -1380,8 +1398,8 @@ public partial class MainViewModel : ViewModelBase
             ProgressPercentText = $"{percent:0}%";
             SpeedFormatted = report.SpeedFormatted;
             EtaFormatted = report.EtaFormatted;
-            ProcessedFilesText = $"{report.ProcessedFiles:N0} de {report.TotalFiles:N0} arquivos";
-            ProcessedBytesText = $"{SyncItem.FormatBytes(report.ProcessedBytes)} de {SyncItem.FormatBytes(report.TotalBytes)}";
+            ProcessedFilesText = $"Arquivos: {report.ProcessedFiles:N0} de {report.TotalFiles:N0}";
+            ProcessedBytesText = $"Volume: {SyncItem.FormatBytes(report.ProcessedBytes)} de {SyncItem.FormatBytes(report.TotalBytes)}";
             CurrentOperationText = !string.IsNullOrEmpty(report.CurrentFileName)
                 ? report.CurrentFileName
                 : "Finalizando...";
@@ -1400,6 +1418,7 @@ public partial class MainViewModel : ViewModelBase
 
             if (AskConflictResolutionAsync != null)
             {
+                CurrentOperationText = item.RelativePath;
                 WaitingDecisionFile = item.RelativePath;
                 IsWaitingForDecision = true;
                 (ConflictResolution choice, bool applyToAll) answer;
@@ -1437,7 +1456,7 @@ public partial class MainViewModel : ViewModelBase
                 _cts!.Token);
 
             StatusMessage = result.HasFailures
-                ? $"Concluída com {result.Failed} falha(s): {result.Summary}."
+                ? $"Concluída com {PtText.Count(result.Failed, "falha", "falhas")}: {result.Summary}."
                 : $"Sincronização concluída sem falhas: {result.Summary}.";
             CurrentOperationText = "Operações finalizadas.";
         }
@@ -1764,7 +1783,7 @@ public partial class MainViewModel : ViewModelBase
             }
 
             IsProgressIndeterminate = true;
-            StatusMessage = $"Restaurando {selected.Count} arquivo(s)...";
+            StatusMessage = $"Restaurando {PtText.Count(selected.Count, "arquivo", "arquivos")}...";
             var result = await _restoreService.RestoreAsync(dest, selected, new InlineProgress<string>(AddLog), _cts.Token);
 
             // Os arquivos do destino mudaram: a análise anterior deixa de valer
@@ -1976,8 +1995,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Escolhe a forma singular ou plural conforme a quantidade ("1 arquivo", "2 arquivos").
     /// </summary>
-    public static string Plural(int count, string singular, string plural) =>
-        $"{count:N0} {(count == 1 ? singular : plural)}";
+    public static string Plural(int count, string singular, string plural) => PtText.Count(count, singular, plural);
 
     /// <summary>
     /// Texto do resultado da restauração de lixo/, com concordância de número.

@@ -46,7 +46,7 @@ A área principal tem quatro telas:
    - a **lista de arquivos**, com busca por caminho. Para conflitos, a coluna Ação mostra a decisão atual;
    - o **painel de detalhes** do arquivo selecionado: tamanho e data nos dois lados (o mais recente fica destacado), o que vai acontecer e, para conflitos, a decisão;
    - a **barra inferior** resume o plano (copiar, substituir, manter, sem decisão, mover para `lixo/`) e traz **Exportar CSV** e **Revisar e sincronizar** (Ctrl+Enter).
-3. **Execução**: percentual (fica em no máximo 99% enquanto houver arquivo por terminar; durante um conflito aparece a faixa **Aguardando sua decisão**), volume e arquivos processados, velocidade, tempo restante, andamento por fase (cópias, conflitos, `lixo/`), arquivo atual e o registro da atividade, com filtro **Avisos e erros**. **Cancelar** (Esc) interrompe sem deixar arquivo parcial.
+3. **Execução**: percentual (fica em no máximo 99% enquanto houver arquivo por terminar; durante um conflito aparece a faixa **Aguardando sua decisão**), **Volume** (soma dos bytes já gravados e total a gravar) e **Arquivos** processados, velocidade, tempo restante, andamento por fase (cópias, com o volume total a copiar; conflitos; `lixo/`), arquivo atual e o registro da atividade, com filtro **Avisos e erros**. **Cancelar** (Esc) interrompe sem deixar arquivo parcial.
 4. **Resultado**: balanço (copiados, substituídos, mantidos, movidos para `lixo/`, falhas), a lista do que não foi feito com o motivo, **Tentar de novo** e atalhos para `lixo/`, `old/`, relatório CSV e **Analisar novamente** (F5). **Ver arquivos** volta à lista com o estado de cada item.
 
 Em janelas com menos de 1.240 px de largura, a árvore de pastas é ocultada para dar espaço à lista e ao painel de detalhes.
@@ -72,7 +72,7 @@ Se você alterar pastas ou opções depois da análise (botão **Alterar**), o p
 2. Revise a janela **Revise antes de sincronizar**: quantos arquivos serão copiados, substituídos, mantidos e movidos para `lixo/`, e quantos conflitos ainda serão perguntados.
 3. Se a operação for mover uma parte grande do destino para `lixo/` (20% ou mais dos arquivos, com mínimo de 10, ou 1.000 arquivos ou mais), a janela exibe um alerta vermelho e só libera o botão depois que você marcar a confirmação. Isso costuma indicar destino escolhido errado.
 4. Acompanhe a tela de execução. Ao final, a tela de resultado mostra o balanço. Itens com falha podem ser reprocessados em **Tentar de novo**.
-5. **Exportar relatório CSV** gera o relatório da análise e do resultado (UTF-8, separado por ponto e vírgula, abre direto no Excel). O cabeçalho usa nomes ASCII (`caminho_relativo`, `acao`, `acao_codigo`, `decisao`, `decisao_codigo`…); as colunas `*_na_analise` mostram o destino como estava antes da sincronização.
+5. **Exportar relatório CSV** gera o relatório da análise e do resultado (UTF-8, separado por ponto e vírgula, abre direto no Excel). O cabeçalho usa nomes ASCII (`caminho_relativo`, `acao`, `acao_codigo`, `decisao`, `decisao_codigo`…); as colunas `*_na_analise` mostram o destino como estava antes da sincronização. Os códigos são em português, sem acento: `acao_codigo` = `novo`, `conflito`, `orfao`, `identico`; `decisao_codigo` = `substituir`, `manter`, `perguntar`. Na barra de busca, o **X** (ou Esc) limpa o texto.
 
 ---
 
