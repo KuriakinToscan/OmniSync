@@ -247,6 +247,17 @@
         <Setter Property="Foreground" Value="{DynamicResource OsAccentTextBrush}" />
     </Style>
 
+    <!-- Seletor de horário com relógio: hora e minutos no topo (a parte em edição fica destacada) -->
+    <Style Selector="Button.clock-part">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.clock-part.active /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource OsAccentSoftBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource OsAccentTextBrush}" />
+    </Style>
+
     <!-- Cartões de próximo passo -->
     <Style Selector="Button.tile">
         <Setter Property="Background" Value="{DynamicResource OsCardBrush}" />

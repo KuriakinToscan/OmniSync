@@ -74,7 +74,7 @@ public sealed class SnoozeService
             : PtText.Count((int)delay.TotalHours, "hora", "horas");
 
     /// <summary>
-    /// Adia: cancela o adiamento pendente da tarefa, se houver, e registra um disparo único em
+    /// Adia por um intervalo: cancela o adiamento pendente da tarefa, se houver, e registra um disparo único em
     /// <paramref name="now"/> + <paramref name="delay"/>.
     /// </summary>
     /// <param name="request">Execução a repetir.</param>
@@ -82,10 +82,40 @@ public sealed class SnoozeService
     /// <param name="now">Momento atual (hora local).</param>
     /// <param name="delay">Intervalo escolhido.</param>
     /// <returns>Mensagem de erro em português, ou <c>null</c> em caso de sucesso.</returns>
-    public string? Snooze(SnoozeRequest request, string executable, DateTime now, TimeSpan delay)
+    public string? Snooze(SnoozeRequest request, string executable, DateTime now, TimeSpan delay) =>
+        Register(request, executable, TruncateToSecond(now + delay), $"por {Describe(delay)}");
+
+    /// <summary>
+    /// Adia até um horário escolhido no relógio ("Escolher horário…"): a próxima ocorrência desse horário
+    /// (hoje, se ainda não passou; senão amanhã), ver <see cref="NextOccurrence"/>.
+    /// </summary>
+    /// <param name="request">Execução a repetir.</param>
+    /// <param name="executable">Executável que o agendador vai chamar.</param>
+    /// <param name="now">Momento atual (hora local).</param>
+    /// <param name="timeOfDay">Horário escolhido (horas e minutos).</param>
+    /// <returns>Mensagem de erro em português, ou <c>null</c> em caso de sucesso.</returns>
+    public string? SnoozeUntil(SnoozeRequest request, string executable, DateTime now, TimeSpan timeOfDay) =>
+        Register(request, executable, NextOccurrence(now, timeOfDay), "para horário escolhido");
+
+    /// <summary>
+    /// Próxima ocorrência de um horário do dia: hoje, se ainda está à frente de <paramref name="now"/>; senão,
+    /// amanhã. O mesmo minuto de agora conta como passado (vira amanhã), para não disparar na hora.
+    /// </summary>
+    /// <param name="now">Momento atual (hora local).</param>
+    /// <param name="timeOfDay">Horário (horas e minutos; segundos ignorados).</param>
+    public static DateTime NextOccurrence(DateTime now, TimeSpan timeOfDay)
+    {
+        var today = now.Date + new TimeSpan(timeOfDay.Hours, timeOfDay.Minutes, 0);
+        var currentMinute = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, now.Kind);
+        return today > currentMinute ? today : today.AddDays(1);
+    }
+
+    /// <summary>
+    /// Cancela o adiamento pendente e registra o disparo único em <paramref name="due"/>.
+    /// </summary>
+    private string? Register(SnoozeRequest request, string executable, DateTime due, string how)
     {
         Cancel(request.TaskId);
-        var due = TruncateToSecond(now + delay);
         var name = BuildName(request.TaskId, due);
         var error = _scheduler.RegisterOnce(name, $"OmniSync: {request.TaskName} (adiado)", request.Arguments, executable, due);
         if (error != null)
@@ -104,7 +134,7 @@ public sealed class SnoozeService
             // O disparo já está no agendador; sem o registro, só não será cancelado automaticamente
             FileLogService.Write($"[AVISO] Registro do adiamento não gravado: {ErrorMessages.Translate(ex)}");
         }
-        FileLogService.Write($"[AGENDA] Tarefa \"{request.TaskName}\" adiada por {Describe(delay)}, até {due:dd/MM HH:mm}.");
+        FileLogService.Write($"[AGENDA] Tarefa \"{request.TaskName}\" adiada {how}, até {due:dd/MM HH:mm}.");
         return null;
     }
 

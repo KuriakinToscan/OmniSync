@@ -192,6 +192,18 @@ public partial class MainViewModel
         MarkScheduleDirty();
     }
 
+    /// <summary>Horário em vigor no campo (o último válido digitado ou escolhido no relógio).</summary>
+    public TimeSpan ScheduleTime => _scheduleTime;
+
+    /// <summary>
+    /// Define o horário escolhido no relógio: preenche o campo em HH:MM (marca o agendamento como alterado).
+    /// </summary>
+    /// <param name="time">Horário (horas e minutos).</param>
+    public void SetScheduleTime(TimeSpan time)
+    {
+        ScheduleTimeText = $"{time.Hours:00}:{time.Minutes:00}";
+    }
+
     /// <summary>
     /// Reescreve o horário digitado no formato HH:MM (ao sair do campo), quando válido.
     /// </summary>
