@@ -22,18 +22,19 @@ namespace OmniSync.Services;
 /// </summary>
 public class SyncEngine : ISyncEngine
 {
-    private readonly IFileSystem _sourceFs;
-    private readonly IFileSystem _destFs;
+    private readonly Func<string, IFileSystem> _resolveSource;
+    private readonly Func<string, IFileSystem> _resolveDest;
 
     /// <summary>
-    /// Cria o motor sobre os sistemas de arquivos da origem e do destino.
+    /// Cria o motor. Sem argumentos, cada caminho escolhe o próprio sistema de arquivos
+    /// (<see cref="FileSystemProvider.For"/>: <c>sftp://</c> ou local).
     /// </summary>
-    /// <param name="sourceFileSystem">Sistema de arquivos da origem; <c>null</c> usa o local (<see cref="LocalFileSystem"/>).</param>
-    /// <param name="destinationFileSystem">Sistema de arquivos do destino; <c>null</c> usa o local.</param>
+    /// <param name="sourceFileSystem">Sistema de arquivos fixo da origem; <c>null</c> escolhe pelo caminho.</param>
+    /// <param name="destinationFileSystem">Sistema de arquivos fixo do destino; <c>null</c> escolhe pelo caminho.</param>
     public SyncEngine(IFileSystem? sourceFileSystem = null, IFileSystem? destinationFileSystem = null)
     {
-        _sourceFs = sourceFileSystem ?? LocalFileSystem.Instance;
-        _destFs = destinationFileSystem ?? LocalFileSystem.Instance;
+        _resolveSource = sourceFileSystem != null ? _ => sourceFileSystem : FileSystemProvider.For;
+        _resolveDest = destinationFileSystem != null ? _ => destinationFileSystem : FileSystemProvider.For;
     }
 
     /// <summary>
@@ -101,7 +102,9 @@ public class SyncEngine : ISyncEngine
                 throw new ArgumentException("Os caminhos de Origem e Destino devem ser informados.");
             }
 
-            if (!_sourceFs.DirectoryExists(sourceDir))
+            var sourceFs = _resolveSource(sourceDir);
+            var destFs = _resolveDest(destDir);
+            if (!sourceFs.DirectoryExists(sourceDir))
             {
                 throw new DirectoryNotFoundException($"O diretório de origem não existe ou não está acessível: {sourceDir}");
             }
@@ -123,7 +126,7 @@ public class SyncEngine : ISyncEngine
                 logger?.Report($"Exclusões ativas: {string.Join("; ", excludes)}");
             }
 
-            bool destExists = _destFs.DirectoryExists(destDir);
+            bool destExists = destFs.DirectoryExists(destDir);
             var stopwatch = Stopwatch.StartNew();
 
             // 1. Indexa Origem e Destino em paralelo (normalmente estão em dispositivos distintos)
@@ -131,9 +134,9 @@ public class SyncEngine : ISyncEngine
                 ? "Indexando Origem e Destino em paralelo (excluindo 'lixo/' e 'old/' do destino)..."
                 : "Indexando Origem. O Destino ainda não existe: todos os arquivos serão novos.");
 
-            var sourceTask = Task.Run(() => IndexTree(_sourceFs, sourceDir, isDestination: false, excludes, logger, cancellationToken), cancellationToken);
+            var sourceTask = Task.Run(() => IndexTree(sourceFs, sourceDir, isDestination: false, excludes, logger, cancellationToken), cancellationToken);
             var destTask = destExists
-                ? Task.Run(() => IndexTree(_destFs, destDir, isDestination: true, excludes, logger, cancellationToken), cancellationToken)
+                ? Task.Run(() => IndexTree(destFs, destDir, isDestination: true, excludes, logger, cancellationToken), cancellationToken)
                 : Task.FromResult(new IndexResult());
             await Task.WhenAll(sourceTask, destTask);
 
@@ -203,7 +206,7 @@ public class SyncEngine : ISyncEngine
                     {
                         RelativePath = relPath,
                         SourceFullPath = src.FullPath,
-                        DestinationFullPath = _destFs.Combine(destDir, relPath),
+                        DestinationFullPath = destFs.Combine(destDir, relPath),
                         SourceSize = src.Length,
                         SourceModifiedUtc = src.LastWriteUtc,
                         ActionType = SyncActionType.New,
@@ -251,8 +254,8 @@ public class SyncEngine : ISyncEngine
                         {
                             // Origem e destino são lidos simultaneamente (normalmente em dispositivos distintos)
                             var hashes = await Task.WhenAll(
-                                ComputeSha256Async(_sourceFs, job.Src.FullPath, token),
-                                ComputeSha256Async(_destFs, job.Dst.FullPath, token));
+                                ComputeSha256Async(sourceFs, job.Src.FullPath, token),
+                                ComputeSha256Async(destFs, job.Dst.FullPath, token));
                             identical[index] = hashes[0].AsSpan().SequenceEqual(hashes[1]);
                         }
                         catch (OperationCanceledException)
@@ -339,9 +342,10 @@ public class SyncEngine : ISyncEngine
         return Task.Run(async () =>
         {
             var normalizedDestDir = PathHelper.NormalizeDirectory(destDir);
-            var trashDir = _destFs.Combine(normalizedDestDir, PathHelper.TrashFolderName);
-            var oldDir = _destFs.Combine(normalizedDestDir, PathHelper.OldFolderName);
-            _destFs.CreateDirectory(normalizedDestDir);
+            var destFs = _resolveDest(normalizedDestDir);
+            var trashDir = destFs.Combine(normalizedDestDir, PathHelper.TrashFolderName);
+            var oldDir = destFs.Combine(normalizedDestDir, PathHelper.OldFolderName);
+            destFs.CreateDirectory(normalizedDestDir);
 
             var result = new SyncResult();
             var pending = itemList.Where(i => !i.IsProcessed && i.ActionType != SyncActionType.Identical).ToList();
@@ -396,8 +400,8 @@ public class SyncEngine : ISyncEngine
                     case SyncActionType.OrphanTrash:
                         try
                         {
-                            var destRel = _destFs.GetRelativePath(normalizedDestDir, item.DestinationFullPath!);
-                            var movedTo = PathHelper.MoveIntoReservedFolder(_destFs, item.DestinationFullPath!, trashDir, destRel);
+                            var destRel = destFs.GetRelativePath(normalizedDestDir, item.DestinationFullPath!);
+                            var movedTo = PathHelper.MoveIntoReservedFolder(destFs, item.DestinationFullPath!, trashDir, destRel);
                             if (movedTo == null)
                             {
                                 result.Skipped++;
@@ -407,7 +411,7 @@ public class SyncEngine : ISyncEngine
                             else
                             {
                                 result.Trashed++;
-                                directoriesToPrune.Add(_destFs.GetDirectoryName(item.DestinationFullPath!)!);
+                                directoriesToPrune.Add(destFs.GetDirectoryName(item.DestinationFullPath!)!);
                                 Update(item, "Movido para lixo/", processed: true, error: false);
                                 logger?.Report($"[LIXO] Movido: {item.RelativePath}");
                             }
@@ -447,7 +451,7 @@ public class SyncEngine : ISyncEngine
                         try
                         {
                             logger?.Report($"[SUBSTITUIR] {item.RelativePath}");
-                            await ReplaceFileAsync(item, normalizedDestDir, oldDir, OnBytesCopied, VerifyCopies, cancellationToken);
+                            await ReplaceFileAsync(destFs, item, normalizedDestDir, oldDir, OnBytesCopied, VerifyCopies, cancellationToken);
                             result.Replaced++;
                             result.BytesCopied += item.SourceSize;
                             Update(item, "Substituído (anterior em old/)", processed: true, error: false, ConflictResolution.Replace);
@@ -467,7 +471,7 @@ public class SyncEngine : ISyncEngine
                         try
                         {
                             logger?.Report($"[NOVO] Copiando: {item.RelativePath}");
-                            await CopyNewFileAsync(item, OnBytesCopied, VerifyCopies, cancellationToken);
+                            await CopyNewFileAsync(destFs, item, OnBytesCopied, VerifyCopies, cancellationToken);
                             result.Copied++;
                             result.BytesCopied += item.SourceSize;
                             Update(item, "Copiado", processed: true, error: false);
@@ -489,7 +493,7 @@ public class SyncEngine : ISyncEngine
             }
 
             // Remove pastas que ficaram vazias no destino após mover órfãos (exclusão não recursiva)
-            var pruned = PathHelper.RemoveEmptyDirectories(_destFs, directoriesToPrune, normalizedDestDir);
+            var pruned = PathHelper.RemoveEmptyDirectories(destFs, directoriesToPrune, normalizedDestDir);
             if (pruned > 0)
             {
                 logger?.Report($"{PtText.Count(pruned, "pasta vazia removida", "pastas vazias removidas")} do destino após mover órfãos.");
@@ -751,24 +755,24 @@ public class SyncEngine : ISyncEngine
     /// Copia um arquivo novo para o destino via arquivo temporário e renomeação. Nunca sobrescreve:
     /// se um arquivo surgiu no destino depois da análise, a operação falha com mensagem explicativa.
     /// </summary>
-    private async Task CopyNewFileAsync(SyncItem item, Action<long> onBytesCopied, bool verify, CancellationToken cancellationToken)
+    private async Task CopyNewFileAsync(IFileSystem destFs, SyncItem item, Action<long> onBytesCopied, bool verify, CancellationToken cancellationToken)
     {
         var destFile = item.DestinationFullPath!;
-        if (_destFs.Exists(destFile))
+        if (destFs.Exists(destFile))
         {
             throw new IOException("Um arquivo com este nome surgiu no destino após a análise (ou difere só em maiúsculas). Analise novamente.");
         }
 
         var tempFile = destFile + PathHelper.TempSuffix;
-        await CopyToTempWithRetryAsync(item.SourceFullPath!, tempFile, onBytesCopied, verify, cancellationToken);
+        await CopyToTempWithRetryAsync(destFs, item.SourceFullPath!, tempFile, onBytesCopied, verify, cancellationToken);
 
         try
         {
-            _destFs.MoveFile(tempFile, destFile);
+            destFs.MoveFile(tempFile, destFile);
         }
         catch
         {
-            PathHelper.TryDeleteFile(_destFs, tempFile);
+            PathHelper.TryDeleteFile(destFs, tempFile);
             throw;
         }
     }
@@ -779,6 +783,7 @@ public class SyncEngine : ISyncEngine
     /// (3) renomeia o temporário. Se (3) falhar, a versão anterior é devolvida ao lugar.
     /// </summary>
     private async Task ReplaceFileAsync(
+        IFileSystem destFs,
         SyncItem item,
         string destRoot,
         string oldDir,
@@ -789,22 +794,22 @@ public class SyncEngine : ISyncEngine
         var destFile = item.DestinationFullPath!;
         var tempFile = destFile + PathHelper.TempSuffix;
 
-        await CopyToTempWithRetryAsync(item.SourceFullPath!, tempFile, onBytesCopied, verify, cancellationToken);
+        await CopyToTempWithRetryAsync(destFs, item.SourceFullPath!, tempFile, onBytesCopied, verify, cancellationToken);
 
         string? archivedPath = null;
         try
         {
-            archivedPath = PathHelper.MoveIntoReservedFolder(_destFs, destFile, oldDir, _destFs.GetRelativePath(destRoot, destFile));
-            _destFs.MoveFile(tempFile, destFile);
+            archivedPath = PathHelper.MoveIntoReservedFolder(destFs, destFile, oldDir, destFs.GetRelativePath(destRoot, destFile));
+            destFs.MoveFile(tempFile, destFile);
         }
         catch
         {
-            PathHelper.TryDeleteFile(_destFs, tempFile);
-            if (archivedPath != null && !_destFs.FileExists(destFile))
+            PathHelper.TryDeleteFile(destFs, tempFile);
+            if (archivedPath != null && !destFs.FileExists(destFile))
             {
                 try
                 {
-                    _destFs.MoveFile(archivedPath, destFile);
+                    destFs.MoveFile(archivedPath, destFile);
                 }
                 catch
                 {
@@ -824,16 +829,18 @@ public class SyncEngine : ISyncEngine
     /// a operação falha sem tocar no arquivo do destino.
     /// </summary>
     private async Task CopyToTempWithRetryAsync(
+        IFileSystem destFs,
         string sourceFile,
         string tempFile,
         Action<long> onBytesCopied,
         bool verify,
         CancellationToken cancellationToken)
     {
-        var destDirectory = _destFs.GetDirectoryName(tempFile);
+        var sourceFs = _resolveSource(sourceFile);
+        var destDirectory = destFs.GetDirectoryName(tempFile);
         if (!string.IsNullOrEmpty(destDirectory))
         {
-            _destFs.CreateDirectory(destDirectory);
+            destFs.CreateDirectory(destDirectory);
         }
 
         int attempt = 0;
@@ -843,9 +850,9 @@ public class SyncEngine : ISyncEngine
             long bytesAddedInCurrentAttempt = 0;
             try
             {
-                PathHelper.TryDeleteFile(_destFs, tempFile);
+                PathHelper.TryDeleteFile(destFs, tempFile);
 
-                var sourceInfo = _sourceFs.GetFile(sourceFile)
+                var sourceInfo = sourceFs.GetFile(sourceFile)
                     ?? throw new FileNotFoundException("O arquivo de origem não existe mais.", sourceFile);
                 long expectedLength = sourceInfo.Length;
                 var lastWriteUtc = sourceInfo.LastWriteUtc;
@@ -854,9 +861,9 @@ public class SyncEngine : ISyncEngine
                 using var sourceHash = verify ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
                 try
                 {
-                    await using var srcStream = _sourceFs.OpenRead(sourceFile);
+                    await using var srcStream = sourceFs.OpenRead(sourceFile);
                     // Leitura também (readBack): a verificação relê o temporário pelo mesmo fluxo, sem reabrir o arquivo
-                    await using var dstStream = _destFs.CreateNew(tempFile, expectedLength, readBack: verify);
+                    await using var dstStream = destFs.CreateNew(tempFile, expectedLength, readBack: verify);
 
                     int bytesRead;
                     while ((bytesRead = await srcStream.ReadAsync(buffer.AsMemory(0, BufferSize), cancellationToken)) > 0)
@@ -894,12 +901,12 @@ public class SyncEngine : ISyncEngine
                 }
 
                 // Preserva a data/hora de modificação original para futuras comparações diferenciais
-                _destFs.SetLastWriteTimeUtc(tempFile, lastWriteUtc);
+                destFs.SetLastWriteTimeUtc(tempFile, lastWriteUtc);
                 return;
             }
             catch (Exception ex) when (attempt < MaxRetries && !cancellationToken.IsCancellationRequested && IsTransient(ex))
             {
-                PathHelper.TryDeleteFile(_destFs, tempFile);
+                PathHelper.TryDeleteFile(destFs, tempFile);
                 // Estorna os bytes contabilizados na tentativa falha antes de tentar novamente
                 if (bytesAddedInCurrentAttempt > 0)
                 {
@@ -913,7 +920,7 @@ public class SyncEngine : ISyncEngine
                 {
                     onBytesCopied(-bytesAddedInCurrentAttempt);
                 }
-                PathHelper.TryDeleteFile(_destFs, tempFile);
+                PathHelper.TryDeleteFile(destFs, tempFile);
                 throw;
             }
         }

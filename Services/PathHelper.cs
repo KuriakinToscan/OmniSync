@@ -47,27 +47,45 @@ public static class PathHelper
 
     /// <summary>
     /// Converte para caminho absoluto e remove o separador final (preservando raízes como <c>C:\</c> e <c>/</c>).
+    /// Endereços <c>sftp://</c> vão para a forma canônica de <see cref="RemoteAddress"/>.
     /// </summary>
+    /// <exception cref="ArgumentException">Endereço <c>sftp://</c> inválido.</exception>
     public static string NormalizeDirectory(string path)
     {
+        if (RemoteAddress.IsRemote(path)) return RemoteAddress.Parse(path).ToString();
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path.Trim()));
     }
 
     /// <summary>
-    /// Verifica se dois caminhos normalizados apontam para a mesma pasta.
+    /// Verifica se dois caminhos normalizados apontam para a mesma pasta. Endereços remotos diferenciam maiúsculas.
     /// </summary>
-    public static bool AreSamePath(string a, string b) => string.Equals(a, b, PathComparison);
+    public static bool AreSamePath(string a, string b) =>
+        string.Equals(a, b, RemoteAddress.IsRemote(a) || RemoteAddress.IsRemote(b) ? StringComparison.Ordinal : PathComparison);
 
     /// <summary>
     /// Verifica se <paramref name="candidate"/> está contido (em qualquer profundidade) em <paramref name="parent"/>.
-    /// Ambos devem estar normalizados por <see cref="NormalizeDirectory"/>.
+    /// Ambos devem estar normalizados por <see cref="NormalizeDirectory"/>. Local e remoto nunca se contêm.
     /// </summary>
     public static bool IsSubPathOf(string candidate, string parent)
     {
         if (AreSamePath(candidate, parent)) return false;
+        bool remote = RemoteAddress.IsRemote(parent);
+        if (remote != RemoteAddress.IsRemote(candidate)) return false;
+        if (remote)
+        {
+            var remotePrefix = parent.EndsWith('/') ? parent : parent + "/";
+            return candidate.StartsWith(remotePrefix, StringComparison.Ordinal);
+        }
         var prefix = Path.EndsInDirectorySeparator(parent) ? parent : parent + Path.DirectorySeparatorChar;
         return candidate.StartsWith(prefix, PathComparison);
     }
+
+    /// <summary>
+    /// Forma canônica de um caminho de arquivo, para comparar com <see cref="IsSubPathOf"/>: absoluto no local,
+    /// canônico no remoto.
+    /// </summary>
+    public static string NormalizeFullPath(string path) =>
+        RemoteAddress.IsRemote(path) ? RemoteAddress.Parse(path).ToString() : Path.GetFullPath(path);
 
     /// <summary>
     /// Expande variáveis de ambiente (<c>%USERPROFILE%</c>, <c>%OneDrive%</c>...) e, no Linux, <c>~</c> e
@@ -78,6 +96,7 @@ public static class PathHelper
     public static string ExpandUserPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        if (RemoteAddress.IsRemote(path)) return path.Trim();
         var result = Environment.ExpandEnvironmentVariables(path.Trim());
         if (!OperatingSystem.IsWindows())
         {
@@ -106,6 +125,11 @@ public static class PathHelper
         destPath = destPath.Trim();
         if (string.IsNullOrWhiteSpace(sourcePath)) return destPath;
 
+        if (RemoteAddress.IsRemote(sourcePath) || RemoteAddress.IsRemote(destPath))
+        {
+            return ResolveEffectiveRemoteDestination(sourcePath.Trim(), destPath, useSourceFolderName);
+        }
+
         var trimmedSource = sourcePath.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var sourceFolderName = Path.GetFileName(trimmedSource);
         if (string.IsNullOrWhiteSpace(sourceFolderName))
@@ -126,6 +150,42 @@ public static class PathHelper
         }
 
         return destPath;
+    }
+
+    /// <summary>
+    /// <see cref="ResolveEffectiveDestination"/> quando origem ou destino é remoto: o nome da origem é o último
+    /// segmento do caminho, e a subpasta é anexada com <c>/</c> no remoto. Endereço inválido devolve o destino como está.
+    /// </summary>
+    private static string ResolveEffectiveRemoteDestination(string sourcePath, string destPath, bool useSourceFolderName)
+    {
+        string sourceFolderName;
+        if (RemoteAddress.IsRemote(sourcePath))
+        {
+            if (!RemoteAddress.TryParse(sourcePath, out var src, out _)) return destPath;
+            sourceFolderName = src.Leaf;
+        }
+        else
+        {
+            sourceFolderName = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        }
+        if (string.IsNullOrWhiteSpace(sourceFolderName)) return destPath;
+
+        if (!RemoteAddress.IsRemote(destPath))
+        {
+            var trimmedDest = destPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var destName = Path.GetFileName(trimmedDest);
+            var root = Path.GetPathRoot(destPath)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            bool isRoot = string.IsNullOrEmpty(destName) || string.Equals(trimmedDest, root, StringComparison.OrdinalIgnoreCase);
+            return (useSourceFolderName || isRoot) && !string.Equals(sourceFolderName, destName, StringComparison.OrdinalIgnoreCase)
+                ? Path.Combine(destPath, sourceFolderName)
+                : destPath;
+        }
+
+        if (!RemoteAddress.TryParse(destPath, out var dst, out _)) return destPath;
+        bool isRemoteRoot = dst.Path == "/";
+        return (useSourceFolderName || isRemoteRoot) && !string.Equals(sourceFolderName, dst.Leaf, StringComparison.Ordinal)
+            ? dst.WithPath(dst.Path + "/" + sourceFolderName).ToString()
+            : destPath;
     }
 
     /// <summary>

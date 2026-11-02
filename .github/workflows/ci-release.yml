@@ -29,6 +29,22 @@ jobs:
       - name: Compilar solução
         run: dotnet build OmniSync.slnx --configuration Release --no-restore
 
+      - name: Servidor SFTP de teste (OpenSSH local, só Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install -y -q openssh-server > /dev/null
+          SENHA="$(openssl rand -hex 12)"
+          sudo useradd -m -s /bin/bash omnisftp
+          echo "omnisftp:${SENHA}" | sudo chpasswd
+          sudo mkdir -p /run/sshd
+          sudo ssh-keygen -A
+          printf 'Port 2222\nListenAddress 127.0.0.1\nPasswordAuthentication yes\nKbdInteractiveAuthentication yes\nUsePAM yes\nSubsystem sftp internal-sftp\nPidFile /run/sshd_omnisync.pid\n' | sudo tee /etc/ssh/sshd_omnisync.conf > /dev/null
+          sudo /usr/sbin/sshd -f /etc/ssh/sshd_omnisync.conf
+          echo "::add-mask::${SENHA}"
+          echo "OMNISYNC_SFTP_TEST=sftp://omnisftp@127.0.0.1:2222/home/omnisftp" >> "$GITHUB_ENV"
+          echo "OMNISYNC_SFTP_PASSWORD=${SENHA}" >> "$GITHUB_ENV"
+          echo "OMNISYNC_SFTP_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Executar testes unitários (xUnit)
         run: dotnet test Tests/OmniSync.Tests.csproj --configuration Release --no-build --verbosity normal
 

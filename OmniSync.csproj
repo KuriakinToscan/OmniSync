@@ -33,5 +33,6 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>
 </Project>

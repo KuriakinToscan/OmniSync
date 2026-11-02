@@ -22,16 +22,18 @@ public sealed partial class RestoreService
     [GeneratedRegex(@"_\d{8}_\d{6}(_\d+)?$")]
     private static partial Regex CollisionSuffixRegex();
 
-    private readonly IFileSystem _fs;
+    private readonly IFileSystem? _fixedFs;
 
     /// <summary>
     /// Cria o serviço sobre o sistema de arquivos do destino.
     /// </summary>
-    /// <param name="fileSystem">Sistema de arquivos onde está o destino; <c>null</c> usa o local (<see cref="LocalFileSystem"/>).</param>
+    /// <param name="fileSystem">Sistema de arquivos fixo do destino; <c>null</c> escolhe pelo caminho (<see cref="FileSystemProvider.For"/>).</param>
     public RestoreService(IFileSystem? fileSystem = null)
     {
-        _fs = fileSystem ?? LocalFileSystem.Instance;
+        _fixedFs = fileSystem;
     }
+
+    private IFileSystem Resolve(string destDir) => _fixedFs ?? FileSystemProvider.For(destDir);
 
     /// <summary>
     /// Lista os arquivos existentes em <c>&lt;destino&gt;/lixo/</c>.
@@ -43,19 +45,20 @@ public sealed partial class RestoreService
     {
         return Task.Run<IReadOnlyList<TrashEntry>>(() =>
         {
-            var trashRoot = _fs.Combine(PathHelper.NormalizeDirectory(destDir), PathHelper.TrashFolderName);
-            if (!_fs.DirectoryExists(trashRoot))
+            var fs = Resolve(destDir);
+            var trashRoot = fs.Combine(PathHelper.NormalizeDirectory(destDir), PathHelper.TrashFolderName);
+            if (!fs.DirectoryExists(trashRoot))
             {
                 return Array.Empty<TrashEntry>();
             }
 
             var entries = new List<TrashEntry>();
-            foreach (var file in _fs.EnumerateFilesRecursive(trashRoot))
+            foreach (var file in fs.EnumerateFilesRecursive(trashRoot))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 entries.Add(new TrashEntry
                 {
-                    RelativePath = _fs.GetRelativePath(trashRoot, file.FullPath),
+                    RelativePath = fs.GetRelativePath(trashRoot, file.FullPath),
                     FullPath = file.FullPath,
                     Size = file.Length,
                     ModifiedUtc = file.LastWriteUtc
@@ -87,7 +90,8 @@ public sealed partial class RestoreService
         return Task.Run(() =>
         {
             var destRoot = PathHelper.NormalizeDirectory(destDir);
-            var trashRoot = _fs.Combine(destRoot, PathHelper.TrashFolderName);
+            var fs = Resolve(destRoot);
+            var trashRoot = fs.Combine(destRoot, PathHelper.TrashFolderName);
             var result = new RestoreResult();
             var touchedDirs = new List<string>();
 
@@ -98,7 +102,7 @@ public sealed partial class RestoreService
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Garante que a entrada pertence de fato a lixo/ deste destino
-                var fullPath = Path.GetFullPath(entry.FullPath);
+                var fullPath = PathHelper.NormalizeFullPath(entry.FullPath);
                 if (!PathHelper.IsSubPathOf(fullPath, trashRoot))
                 {
                     result.Failed++;
@@ -108,14 +112,14 @@ public sealed partial class RestoreService
 
                 try
                 {
-                    if (!_fs.FileExists(fullPath))
+                    if (!fs.FileExists(fullPath))
                     {
                         result.Failed++;
                         logger?.Report($"[AVISO] Não encontrado em lixo/: {entry.RelativePath}");
                         continue;
                     }
 
-                    var target = ResolveRestoreTarget(destRoot, entry.RelativePath);
+                    var target = ResolveRestoreTarget(fs, destRoot, entry.RelativePath);
                     if (target == null)
                     {
                         result.KeptInTrash++;
@@ -123,14 +127,14 @@ public sealed partial class RestoreService
                         continue;
                     }
 
-                    var targetDir = _fs.GetDirectoryName(target);
+                    var targetDir = fs.GetDirectoryName(target);
                     if (!string.IsNullOrEmpty(targetDir))
                     {
-                        _fs.CreateDirectory(targetDir);
+                        fs.CreateDirectory(targetDir);
                     }
 
-                    _fs.MoveFile(fullPath, target);
-                    touchedDirs.Add(_fs.GetDirectoryName(fullPath)!);
+                    fs.MoveFile(fullPath, target);
+                    touchedDirs.Add(fs.GetDirectoryName(fullPath)!);
                     result.Restored++;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -141,7 +145,7 @@ public sealed partial class RestoreService
             }
 
             // Remove apenas pastas que ficaram vazias dentro de lixo/ (e o próprio lixo/, se vazio)
-            PathHelper.RemoveEmptyDirectories(_fs, touchedDirs, trashRoot, includeStopAt: true);
+            PathHelper.RemoveEmptyDirectories(fs, touchedDirs, trashRoot, includeStopAt: true);
 
             logger?.Report($"[RESTAURAÇÃO] Concluída: {result.Restored} restaurados, {result.KeptInTrash} mantidos em lixo/ por já existirem, {result.Failed} falhas.");
             return result;
@@ -152,10 +156,10 @@ public sealed partial class RestoreService
     /// Determina o caminho de restauração: o nome original sem sufixo de desambiguação, se livre;
     /// senão o nome como está em <c>lixo/</c>, se livre; senão <c>null</c>.
     /// </summary>
-    private string? ResolveRestoreTarget(string destRoot, string relativePath)
+    private static string? ResolveRestoreTarget(IFileSystem fs, string destRoot, string relativePath)
     {
-        var direct = _fs.Combine(destRoot, relativePath);
-        var dir = _fs.GetDirectoryName(direct)!;
+        var direct = fs.Combine(destRoot, relativePath);
+        var dir = fs.GetDirectoryName(direct)!;
         var fileName = Path.GetFileName(direct);
         var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
         var ext = Path.GetExtension(fileName);
@@ -163,14 +167,14 @@ public sealed partial class RestoreService
         var stripped = CollisionSuffixRegex().Replace(nameWithoutExt, string.Empty);
         if (stripped.Length > 0 && stripped != nameWithoutExt)
         {
-            var original = _fs.Combine(dir, stripped + ext);
-            if (!_fs.Exists(original))
+            var original = fs.Combine(dir, stripped + ext);
+            if (!fs.Exists(original))
             {
                 return original;
             }
         }
 
-        if (!_fs.Exists(direct))
+        if (!fs.Exists(direct))
         {
             return direct;
         }
