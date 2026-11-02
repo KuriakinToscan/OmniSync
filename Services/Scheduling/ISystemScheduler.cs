@@ -33,6 +33,24 @@ public interface ISystemScheduler
     /// </summary>
     /// <param name="taskId">Identificador da tarefa.</param>
     bool Exists(Guid taskId);
+
+    /// <summary>
+    /// Registra um disparo único (adiamento), que executa uma vez no horário e depois se desfaz.
+    /// </summary>
+    /// <param name="name">Nome do disparo (ver <see cref="SnoozeService.BuildName"/>).</param>
+    /// <param name="description">Descrição exibida no agendador.</param>
+    /// <param name="arguments">Argumentos da execução.</param>
+    /// <param name="executable">Executável que o agendador vai chamar.</param>
+    /// <param name="when">Horário, em hora local.</param>
+    /// <returns>Mensagem de erro em português, ou <c>null</c> em caso de sucesso.</returns>
+    string? RegisterOnce(string name, string description, IReadOnlyList<string> arguments, string executable, DateTime when);
+
+    /// <summary>
+    /// Remove um disparo único ainda pendente, se existir.
+    /// </summary>
+    /// <param name="name">Nome do disparo.</param>
+    /// <returns>Mensagem de erro em português, ou <c>null</c> em caso de sucesso (inclusive quando não existia).</returns>
+    string? UnregisterOnce(string name);
 }
 
 /// <summary>

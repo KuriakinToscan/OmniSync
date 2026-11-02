@@ -389,6 +389,7 @@ public partial class MainViewModel
                     AddLog($"[ERRO] Agendamento da tarefa \"{profile.Name}\" não removido: {error}");
                     return;
                 }
+                await CancelSnoozeAsync(profile);
                 AddLog($"[AGENDA] Agendamento da tarefa \"{profile.Name}\" desligado.");
             }
 
@@ -530,7 +531,21 @@ public partial class MainViewModel
                 ? $"[AGENDA] Agendamento da tarefa excluída \"{profile.Name}\" removido."
                 : $"[ERRO] Agendamento da tarefa excluída \"{profile.Name}\" não removido: {error}");
         }
+        await CancelSnoozeAsync(profile);
         RunHistory.Delete(profile.Id);
+    }
+
+    /// <summary>
+    /// Cancela o adiamento pendente da tarefa ("Adiar" no aviso), se houver. Falhas vão para o registro.
+    /// </summary>
+    private async Task CancelSnoozeAsync(SyncProfile profile)
+    {
+        var snoozes = new SnoozeService(Scheduler, SnoozeService.DefaultDirectory);
+        if (snoozes.Read(profile.Id) == null) return;
+        var error = await Task.Run(() => snoozes.Cancel(profile.Id));
+        AddLog(error == null
+            ? $"[AGENDA] Adiamento pendente da tarefa \"{profile.Name}\" cancelado."
+            : $"[ERRO] Adiamento pendente da tarefa \"{profile.Name}\" não cancelado: {error}");
     }
 
     /// <summary>

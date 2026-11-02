@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -61,6 +62,37 @@ public sealed class WindowsTaskScheduler : ISystemScheduler
     public bool Exists(Guid taskId) =>
         SystemScheduler.Run("schtasks.exe", new[] { "/Query", "/TN", TaskName(taskId) }, OemEncoding()).ExitCode == 0;
 
+    /// <inheritdoc />
+    public string? RegisterOnce(string name, string description, IReadOnlyList<string> arguments, string executable, DateTime when)
+    {
+        var xmlPath = Path.Combine(Path.GetTempPath(), $"omnisync-adiado-{Guid.NewGuid():N}.xml");
+        try
+        {
+            var user = $"{Environment.UserDomainName}\\{Environment.UserName}";
+            WriteXml(BuildOnceXml(name, description, arguments, executable, user, when), xmlPath);
+            var (code, output) = SystemScheduler.Run("schtasks.exe",
+                new[] { "/Create", "/TN", $"\\{FolderName}\\{name}", "/XML", xmlPath, "/F" }, OemEncoding());
+            return code == 0 ? null : $"O Agendador de Tarefas recusou o adiamento: {SystemScheduler.FirstLine(output)}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"Não foi possível preparar o adiamento: {ErrorMessages.Translate(ex)}";
+        }
+        finally
+        {
+            PathHelper.TryDeleteFile(xmlPath);
+        }
+    }
+
+    /// <inheritdoc />
+    public string? UnregisterOnce(string name)
+    {
+        var fullName = $"\\{FolderName}\\{name}";
+        if (SystemScheduler.Run("schtasks.exe", new[] { "/Query", "/TN", fullName }, OemEncoding()).ExitCode != 0) return null;
+        var (code, output) = SystemScheduler.Run("schtasks.exe", new[] { "/Delete", "/TN", fullName, "/F" }, OemEncoding());
+        return code == 0 ? null : $"Não foi possível remover o adiamento: {SystemScheduler.FirstLine(output)}";
+    }
+
     /// <summary>
     /// Monta a definição da tarefa agendada (esquema do Agendador de Tarefas 1.2).
     /// </summary>
@@ -94,39 +126,72 @@ public sealed class WindowsTaskScheduler : ISystemScheduler
                 new XElement(Ns + "ScheduleByDay", new XElement(Ns + "DaysInterval", "1")))
         };
 
+        return BuildDocument(TaskName(taskId), $"OmniSync: {taskName}. {schedule.Describe()}.", trigger,
+            schedule.BuildArguments(taskId), executable, userId, deleteExpiredAfter: null);
+    }
+
+    /// <summary>
+    /// Monta a definição de um disparo único (adiamento): gatilho de horário único que expira um dia depois e
+    /// é apagado pelo próprio Agendador de Tarefas após expirar.
+    /// </summary>
+    /// <param name="name">Nome do disparo (item dentro da pasta <c>\OmniSync</c>).</param>
+    /// <param name="description">Descrição.</param>
+    /// <param name="arguments">Argumentos da execução.</param>
+    /// <param name="executable">Executável a chamar.</param>
+    /// <param name="userId">Usuário (DOMÍNIO\usuário) que executa.</param>
+    /// <param name="when">Horário (hora local).</param>
+    public static XDocument BuildOnceXml(string name, string description, IReadOnlyList<string> arguments, string executable, string userId, DateTime when)
+    {
+        var trigger = new XElement(Ns + "TimeTrigger",
+            new XElement(Ns + "StartBoundary", when.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture)),
+            new XElement(Ns + "EndBoundary", when.AddDays(1).ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture)),
+            new XElement(Ns + "Enabled", "true"));
+        return BuildDocument($"\\{FolderName}\\{name}", description, trigger, arguments, executable, userId, deleteExpiredAfter: "PT1H");
+    }
+
+    /// <summary>
+    /// Definição comum: roda como o usuário, só com a sessão aberta, na bateria, assim que possível após um horário
+    /// perdido e sem duas instâncias simultâneas.
+    /// </summary>
+    private static XDocument BuildDocument(string uri, string description, XElement trigger, IEnumerable<string> arguments,
+        string executable, string userId, string? deleteExpiredAfter)
+    {
+        var settings = new XElement(Ns + "Settings",
+            new XElement(Ns + "MultipleInstancesPolicy", "IgnoreNew"),
+            new XElement(Ns + "DisallowStartIfOnBatteries", "false"),
+            new XElement(Ns + "StopIfGoingOnBatteries", "false"),
+            new XElement(Ns + "AllowHardTerminate", "true"),
+            new XElement(Ns + "StartWhenAvailable", "true"),
+            new XElement(Ns + "RunOnlyIfNetworkAvailable", "false"),
+            new XElement(Ns + "IdleSettings",
+                new XElement(Ns + "StopOnIdleEnd", "false"),
+                new XElement(Ns + "RestartOnIdle", "false")),
+            new XElement(Ns + "AllowStartOnDemand", "true"),
+            new XElement(Ns + "Enabled", "true"),
+            new XElement(Ns + "Hidden", "false"),
+            new XElement(Ns + "RunOnlyIfIdle", "false"),
+            new XElement(Ns + "WakeToRun", "false"),
+            new XElement(Ns + "ExecutionTimeLimit", "PT72H"),
+            deleteExpiredAfter == null ? null : new XElement(Ns + "DeleteExpiredTaskAfter", deleteExpiredAfter),
+            new XElement(Ns + "Priority", "7"));
+
         return new XDocument(
             new XDeclaration("1.0", "UTF-16", null),
             new XElement(Ns + "Task", new XAttribute("version", "1.2"),
                 new XElement(Ns + "RegistrationInfo",
-                    new XElement(Ns + "Description", $"OmniSync: {taskName}. {schedule.Describe()}."),
-                    new XElement(Ns + "URI", TaskName(taskId))),
+                    new XElement(Ns + "Description", description),
+                    new XElement(Ns + "URI", uri)),
                 new XElement(Ns + "Triggers", trigger),
                 new XElement(Ns + "Principals",
                     new XElement(Ns + "Principal", new XAttribute("id", "Author"),
                         new XElement(Ns + "UserId", userId),
                         new XElement(Ns + "LogonType", "InteractiveToken"),
                         new XElement(Ns + "RunLevel", "LeastPrivilege"))),
-                new XElement(Ns + "Settings",
-                    new XElement(Ns + "MultipleInstancesPolicy", "IgnoreNew"),
-                    new XElement(Ns + "DisallowStartIfOnBatteries", "false"),
-                    new XElement(Ns + "StopIfGoingOnBatteries", "false"),
-                    new XElement(Ns + "AllowHardTerminate", "true"),
-                    new XElement(Ns + "StartWhenAvailable", "true"),
-                    new XElement(Ns + "RunOnlyIfNetworkAvailable", "false"),
-                    new XElement(Ns + "IdleSettings",
-                        new XElement(Ns + "StopOnIdleEnd", "false"),
-                        new XElement(Ns + "RestartOnIdle", "false")),
-                    new XElement(Ns + "AllowStartOnDemand", "true"),
-                    new XElement(Ns + "Enabled", "true"),
-                    new XElement(Ns + "Hidden", "false"),
-                    new XElement(Ns + "RunOnlyIfIdle", "false"),
-                    new XElement(Ns + "WakeToRun", "false"),
-                    new XElement(Ns + "ExecutionTimeLimit", "PT72H"),
-                    new XElement(Ns + "Priority", "7")),
+                settings,
                 new XElement(Ns + "Actions", new XAttribute("Context", "Author"),
                     new XElement(Ns + "Exec",
                         new XElement(Ns + "Command", executable),
-                        new XElement(Ns + "Arguments", string.Join(' ', schedule.BuildArguments(taskId))),
+                        new XElement(Ns + "Arguments", string.Join(' ', arguments)),
                         new XElement(Ns + "WorkingDirectory", Path.GetDirectoryName(executable) ?? string.Empty)))));
     }
 

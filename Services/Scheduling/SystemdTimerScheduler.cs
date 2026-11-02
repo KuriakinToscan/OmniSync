@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using OmniSync.Models;
@@ -63,6 +65,51 @@ public sealed class SystemdTimerScheduler : ISystemScheduler
 
     /// <inheritdoc />
     public bool Exists(Guid taskId) => File.Exists(Path.Combine(UnitDirectory, UnitName(taskId) + ".timer"));
+
+    /// <inheritdoc />
+    public string? RegisterOnce(string name, string description, IReadOnlyList<string> arguments, string executable, DateTime when)
+    {
+        var (code, output) = SystemScheduler.Run("systemd-run", BuildOnceArguments(name, description, arguments, executable, when));
+        return code == 0 ? null : $"O systemd recusou o adiamento: {SystemScheduler.FirstLine(output)}";
+    }
+
+    /// <inheritdoc />
+    public string? UnregisterOnce(string name)
+    {
+        var unit = OnceUnitName(name);
+        // Parar só o timer: se o serviço do adiamento já estiver rodando, ele termina normalmente
+        var (code, output) = SystemScheduler.Run("systemctl", new[] { "--user", "stop", unit + ".timer" });
+        if (code != 0 && !output.Contains("not loaded", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Não foi possível remover o adiamento: {SystemScheduler.FirstLine(output)}";
+        }
+        return null;
+    }
+
+    /// <summary>Nome da unit transitória de um disparo único.</summary>
+    /// <param name="name">Nome do disparo.</param>
+    public static string OnceUnitName(string name) => $"omnisync-{name}";
+
+    /// <summary>
+    /// Argumentos do <c>systemd-run</c> para um disparo único: timer transitório do usuário, no horário exato,
+    /// descartado após executar (não sobrevive a um reinício do computador).
+    /// </summary>
+    public static IReadOnlyList<string> BuildOnceArguments(string name, string description, IReadOnlyList<string> arguments, string executable, DateTime when)
+    {
+        var args = new List<string>
+        {
+            "--user",
+            $"--unit={OnceUnitName(name)}",
+            $"--description={OneLine(description)}",
+            $"--on-calendar={when.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}",
+            "--timer-property=AccuracySec=1s",
+            "--collect",
+            "--",
+            executable
+        };
+        args.AddRange(arguments);
+        return args;
+    }
 
     /// <summary>
     /// Unit de serviço que executa a tarefa uma vez.
