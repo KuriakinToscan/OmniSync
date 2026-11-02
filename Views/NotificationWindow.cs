@@ -15,9 +15,10 @@ namespace OmniSync.Views;
 
 /// <summary>
 /// Janela pequena de aviso ao fim de uma execução agendada, no canto inferior direito, sempre à frente.
-/// Fecha sozinha após <see cref="AutoCloseSeconds"/> segundos, salvo quando o aviso é um problema ou o mouse
-/// passa sobre ela. Quando repetir a execução faz sentido, oferece "Adiar" (15 min, 1 h ou 4 h): a execução é
-/// repetida no horário e só avisa de novo se ainda houver o que avisar.
+/// Avisos informativos sem ação pendente (ex.: "sincronizada") fecham sozinhos após <see cref="AutoCloseSeconds"/>
+/// segundos, salvo com o mouse sobre a janela. Avisos de problema e avisos com "Adiar" ficam até o usuário escolher.
+/// "Adiar" (15 min, 1 h ou 4 h) repete a execução no horário, que só avisa de novo se ainda houver o que avisar.
+/// O log registra quando o aviso aparece e como terminou.
 /// </summary>
 public sealed class NotificationWindow : Window
 {
@@ -31,6 +32,7 @@ public sealed class NotificationWindow : Window
     private readonly TextBlock _error;
     private readonly StackPanel _buttons;
     private IDisposable? _autoClose;
+    private string _closeReason = "fechado pela janela";
 
     /// <summary>
     /// Cria a janela de aviso.
@@ -55,11 +57,11 @@ public sealed class NotificationWindow : Window
         var open = new Button { Content = "Abrir OmniSync", IsDefault = true };
         open.Classes.Add("accent");
         open.Classes.Add("primary");
-        open.Click += (_, _) => { OpenApp(); Close(); };
+        open.Click += (_, _) => { OpenApp(); CloseWith("aberto o OmniSync"); };
 
         var close = new Button { Content = "Fechar", IsCancel = true };
         close.Classes.Add("secondary");
-        close.Click += (_, _) => Close();
+        close.Click += (_, _) => CloseWith("fechado pelo usuário");
 
         _message = new TextBlock { Text = notification.Message, TextWrapping = TextWrapping.Wrap };
         _error = new TextBlock { TextWrapping = TextWrapping.Wrap, IsVisible = false };
@@ -99,10 +101,16 @@ public sealed class NotificationWindow : Window
             Children = { header, _buttons }
         };
 
-        Opened += (_, _) => Dispatcher.UIThread.Post(PlaceBottomRight, DispatcherPriority.Loaded);
-        if (!notification.IsProblem)
+        Opened += (_, _) =>
         {
-            _autoClose = DispatcherTimer.RunOnce(Close, TimeSpan.FromSeconds(AutoCloseSeconds));
+            FileLogService.Write($"[AVISO AO USUÁRIO] Janela exibida: {notification.Title}.");
+            Dispatcher.UIThread.Post(PlaceBottomRight, DispatcherPriority.Loaded);
+        };
+        Closed += (_, _) => FileLogService.Write($"[AVISO AO USUÁRIO] Janela encerrada: {_closeReason}.");
+        if (AutoCloses(notification))
+        {
+            _autoClose = DispatcherTimer.RunOnce(() => CloseWith($"fechado por tempo ({AutoCloseSeconds} s)"),
+                TimeSpan.FromSeconds(AutoCloseSeconds));
             // Com o mouse sobre o aviso, o usuário está lendo ou escolhendo: não fecha sozinho
             PointerEntered += (_, _) => StopAutoClose();
         }
@@ -163,7 +171,21 @@ public sealed class NotificationWindow : Window
                         "O OmniSync verifica de novo nesse horário e só avisa se ainda houver o que fazer.";
         _error.IsVisible = false;
         Dispatcher.UIThread.Post(PlaceBottomRight, DispatcherPriority.Loaded);
-        DispatcherTimer.RunOnce(Close, TimeSpan.FromSeconds(4));
+        _closeReason = $"adiado por {SnoozeService.Describe(delay)}";
+        DispatcherTimer.RunOnce(() => CloseWith(_closeReason), TimeSpan.FromSeconds(4));
+    }
+
+    /// <summary>
+    /// Indica se o aviso fecha sozinho: só os informativos sem ação pendente. Problemas e avisos com "Adiar"
+    /// (o usuário pode ter pedido esse lembrete) ficam na tela até uma escolha.
+    /// </summary>
+    /// <param name="notification">Aviso.</param>
+    public static bool AutoCloses(CliNotification notification) => !notification.IsProblem && notification.Snooze == null;
+
+    private void CloseWith(string reason)
+    {
+        _closeReason = reason;
+        Close();
     }
 
     private void StopAutoClose()

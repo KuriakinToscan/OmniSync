@@ -660,6 +660,19 @@ public class ScheduleTests : IDisposable
         Assert.Equal(new[] { "15 minutos", "1 hora", "4 horas" }, SnoozeService.Options.Select(SnoozeService.Describe));
     }
 
+    /// <summary>
+    /// Só avisos informativos sem "Adiar" fecham sozinhos; problemas e avisos com "Adiar" esperam o usuário.
+    /// </summary>
+    [Fact]
+    public void Notification_AutoClose_OnlyWithoutActionPending()
+    {
+        var snooze = new SnoozeRequest(Id, "Campo", new[] { "--analisar" }, _root);
+        Assert.True(OmniSync.Views.NotificationWindow.AutoCloses(new CliNotification("t", "m", false)));
+        Assert.False(OmniSync.Views.NotificationWindow.AutoCloses(new CliNotification("t", "m", false, snooze)));
+        Assert.False(OmniSync.Views.NotificationWindow.AutoCloses(new CliNotification("t", "m", true)));
+        Assert.False(OmniSync.Views.NotificationWindow.AutoCloses(new CliNotification("t", "m", true, snooze)));
+    }
+
     // ------------------------------------------------------------------ Instalação
 
     /// <summary>
