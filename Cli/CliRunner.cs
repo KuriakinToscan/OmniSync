@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OmniSync.Models;
 using OmniSync.Services;
+using OmniSync.Services.Scheduling;
 
 namespace OmniSync.Cli;
 
@@ -24,6 +25,8 @@ public sealed class CliRunner
     private readonly string _settingsPath;
     private readonly string _historyDirectory;
     private readonly string _lockDirectory;
+    private readonly string _snoozeDirectory;
+    private readonly ISystemScheduler _scheduler;
 
     /// <summary>
     /// Cria o executor.
@@ -31,8 +34,10 @@ public sealed class CliRunner
     /// <param name="engine">Motor de sincronização.</param>
     /// <param name="output">Saída de texto (console ou, nos testes, um <see cref="StringWriter"/>).</param>
     /// <param name="settingsPath">Arquivo de configurações com as tarefas salvas.</param>
-    public CliRunner(ISyncEngine engine, TextWriter output, string settingsPath)
+    /// <param name="scheduler">Agendador do sistema, para cancelar adiamentos (padrão: o da plataforma).</param>
+    public CliRunner(ISyncEngine engine, TextWriter output, string settingsPath, ISystemScheduler? scheduler = null)
     {
+        _scheduler = scheduler ?? SystemScheduler.Current;
         _engine = engine;
         _output = TextWriter.Synchronized(output);
         _settingsPath = settingsPath;
@@ -40,6 +45,7 @@ public sealed class CliRunner
         var dataDirectory = Path.GetDirectoryName(Path.GetFullPath(settingsPath))!;
         _historyDirectory = Path.Combine(dataDirectory, "history");
         _lockDirectory = Path.Combine(dataDirectory, "locks");
+        _snoozeDirectory = Path.Combine(dataDirectory, "snooze");
     }
 
     /// <summary>
@@ -113,6 +119,12 @@ public sealed class CliRunner
             _output.WriteLine(lookupError);
             Notify(command, "Agendamento do OmniSync não executado", lookupError!, problem: true);
             return CliExitCode.InvalidInput;
+        }
+
+        if (command.Scheduled)
+        {
+            // Execução agendada: o adiamento pendente desta tarefa perde o sentido (ou é ele mesmo executando)
+            new SnoozeService(_scheduler, _snoozeDirectory).OnScheduledRun(profile.Id, DateTime.Now);
         }
 
         bool run = command.Action == CliAction.Run;
@@ -193,7 +205,8 @@ public sealed class CliRunner
             if (pending > 0)
             {
                 Notify(command, $"{profile.Name}: há alterações para sincronizar",
-                    $"{pendingText}. Abra o OmniSync para revisar e sincronizar.", problem: false);
+                    $"{pendingText}. Abra o OmniSync para revisar e sincronizar.", problem: false,
+                    snooze: BuildSnooze(command, profile));
             }
             return ok ? CliExitCode.Success : CliExitCode.Failures;
         }
@@ -263,7 +276,8 @@ public sealed class CliRunner
         if (result.HasFailures)
         {
             Notify(command, $"{profile.Name}: sincronizada com {PtText.Count(result.Failed, "falha", "falhas")}",
-                $"{result.Summary}. Abra o OmniSync para ver os arquivos que falharam.", problem: true);
+                $"{result.Summary}. Abra o OmniSync para ver os arquivos que falharam.", problem: true,
+                snooze: BuildSnooze(command, profile));
         }
         else if (result.Copied + result.Replaced + result.Trashed > 0)
         {
@@ -276,12 +290,31 @@ public sealed class CliRunner
     /// <summary>
     /// Prepara o aviso exibido ao fim de uma execução agendada (ignorado fora do agendamento).
     /// </summary>
-    private void Notify(CliCommand command, string title, string message, bool problem)
+    private void Notify(CliCommand command, string title, string message, bool problem, SnoozeRequest? snooze = null)
     {
         if (command.Scheduled)
         {
-            Notification = new CliNotification(title, message, problem);
+            Notification = new CliNotification(title, message, problem, snooze);
         }
+    }
+
+    /// <summary>
+    /// Execução a repetir pelo botão "Adiar": a mesma ação e política de conflitos, pelo id da tarefa, como agendada.
+    /// </summary>
+    private SnoozeRequest BuildSnooze(CliCommand command, SyncProfile profile)
+    {
+        var args = new List<string>
+        {
+            command.Action == CliAction.Run ? "--sincronizar" : "--analisar",
+            profile.Id.ToString("D"),
+            "--agendado"
+        };
+        if (command.Action == CliAction.Run)
+        {
+            args.Add("--conflitos");
+            args.Add(command.ConflictPolicy == CliConflictPolicy.Keep ? "manter" : "origem-mais-nova");
+        }
+        return new SnoozeRequest(profile.Id, profile.Name, args, _snoozeDirectory);
     }
 
     /// <summary>
@@ -472,4 +505,8 @@ public sealed class CliRunner
 /// <param name="Title">Título (ex.: "Campo: sincronizada").</param>
 /// <param name="Message">Texto do aviso.</param>
 /// <param name="IsProblem">Se é um problema (falhas, abortado, erro) e merece destaque.</param>
-public sealed record CliNotification(string Title, string Message, bool IsProblem);
+/// <param name="Snooze">
+/// Execução a repetir quando o usuário escolhe "Adiar", ou <c>null</c> quando repetir não mudaria o resultado
+/// (sincronizada, remoção em massa abortada, tarefa inválida).
+/// </param>
+public sealed record CliNotification(string Title, string Message, bool IsProblem, SnoozeRequest? Snooze = null);
