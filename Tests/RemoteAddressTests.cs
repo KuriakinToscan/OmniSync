@@ -85,3 +85,39 @@ public class RemoteAddressTests
         Assert.Contains("usuário", PathHelper.DescribePairProblem(Path.GetTempPath(), "sftp://nas/dados"));
     }
 }
+
+/// <summary>Teste que só roda no Windows (o cofre do Windows); nos outros sistemas aparece como ignorado.</summary>
+public sealed class WindowsFactAttribute : FactAttribute
+{
+    /// <summary>Marca como ignorado fora do Windows.</summary>
+    public WindowsFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows()) Skip = "Só no Windows.";
+    }
+}
+
+/// <summary>Cofre de senhas do Windows (Gerenciador de Credenciais).</summary>
+public class WindowsCredentialStoreTests
+{
+    /// <summary>Grava, lê (com acentos), substitui e apaga uma credencial.</summary>
+    [WindowsFact]
+    public void RoundTrip()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var store = new OmniSync.Services.Remote.WindowsCredentialStore();
+        var key = OmniSync.Services.Remote.CredentialStore.KeyFor("teste@" + Guid.NewGuid().ToString("N") + ":22");
+        try
+        {
+            Assert.Null(store.Read(key));
+            Assert.True(store.Write(key, "s3nha çé #1"));
+            Assert.Equal("s3nha çé #1", store.Read(key));
+            Assert.True(store.Write(key, "outra"));
+            Assert.Equal("outra", store.Read(key));
+        }
+        finally
+        {
+            store.Delete(key);
+        }
+        Assert.Null(store.Read(key));
+    }
+}

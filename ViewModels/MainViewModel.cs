@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OmniSync.Models;
 using OmniSync.Services;
+using OmniSync.Services.FileSystems;
 
 namespace OmniSync.ViewModels;
 
@@ -681,6 +682,7 @@ public partial class MainViewModel : ViewModelBase
         _persistSettings = loadSettings;
         _settings = loadSettings ? SettingsService.Load() : new AppSettings();
         InitializeScheduleEditor();
+        InitializeRemote();
         Logs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoSessionLogs));
 
         foreach (var profile in _settings.Profiles)
@@ -1249,6 +1251,10 @@ public partial class MainViewModel : ViewModelBase
         var effectiveDest = EffectiveDestinationPath;
 
         SaveSettings();
+        if (!await EnsureRemoteConnectedAsync(SourcePath.Trim(), effectiveDest))
+        {
+            return;
+        }
         ClearPlan();
         IsShowingResult = false;
         LastResult = null;
@@ -1392,6 +1398,11 @@ public partial class MainViewModel : ViewModelBase
             StatusMessage = busy;
             AddLog($"[AVISO] {busy}");
             if (NotifyAsync != null) await NotifyAsync("Tarefa em execução", busy);
+            return;
+        }
+
+        if (!await EnsureRemoteConnectedAsync(SourcePath.Trim(), EffectiveDestinationPath))
+        {
             return;
         }
 
@@ -1790,6 +1801,7 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(DestinationPath)) return;
 
         var dest = EffectiveDestinationPath;
+        if (!await EnsureRemoteConnectedAsync(dest)) return;
         IsSyncing = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Lendo a pasta lixo/...";
@@ -1903,6 +1915,9 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Rótulo dos botões que abrem origem e destino no gerenciador de arquivos.</summary>
     public string OpenInFileManagerText => $"Abrir no {FileManagerName}";
 
+    private static string RemoteFolderMessage(string path) =>
+        $"{path} fica num servidor remoto e não abre no gerenciador de arquivos. Use o seu programa de SFTP (ex.: WinSCP ou FileZilla) para ver a pasta.";
+
     /// <summary>
     /// Abre a pasta de origem ou de destino no gerenciador de arquivos. Para o destino, abre o destino efetivo;
     /// se ele ainda não existe (primeira sincronização), abre a pasta escolhida e avisa.
@@ -1916,6 +1931,11 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(path))
         {
             StatusMessage = isSource ? "Escolha a origem primeiro." : "Escolha o destino primeiro.";
+            return;
+        }
+        if (RemoteAddress.IsRemote(path))
+        {
+            StatusMessage = RemoteFolderMessage(path);
             return;
         }
         if (Directory.Exists(path))
@@ -1952,6 +1972,11 @@ public partial class MainViewModel : ViewModelBase
         var path = side == "source" ? item.SourceFullPath : item.DestinationFullPath;
         if (string.IsNullOrWhiteSpace(path)) return;
 
+        if (RemoteAddress.IsRemote(path))
+        {
+            StatusMessage = RemoteFolderMessage(path);
+            return;
+        }
         var folder = Path.GetDirectoryName(path);
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
         {
@@ -1970,6 +1995,11 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(DestinationPath))
         {
             StatusMessage = "Por favor, selecione primeiro o diretório de destino.";
+            return;
+        }
+        if (RemoteAddress.IsRemote(EffectiveDestinationPath))
+        {
+            StatusMessage = RemoteFolderMessage(EffectiveDestinationPath.TrimEnd('/') + "/" + subFolder);
             return;
         }
 

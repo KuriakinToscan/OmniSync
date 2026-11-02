@@ -31,6 +31,16 @@
         <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
         <Setter Property="FontSize" Value="12.5" />
     </Style>
+    <Style Selector="SelectableTextBlock.mono">
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="TextBlock.danger-text">
+        <Setter Property="Foreground" Value="{DynamicResource OsDangerTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.ok-text">
+        <Setter Property="Foreground" Value="{DynamicResource OsAccentTextBrush}" />
+    </Style>
     <Style Selector="TextBox.mono">
         <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
         <Setter Property="FontSize" Value="12.5" />

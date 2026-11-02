@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -53,6 +54,7 @@ public partial class MainWindow : Window
             vm.SelectTrashEntriesAsync = SelectTrashEntriesAsync;
             vm.ConfirmAsync = (title, message, confirmText) => MessageDialog.ShowAsync(this, title, message, confirmText);
             vm.NotifyAsync = (title, message) => MessageDialog.InformAsync(this, title, message);
+            vm.RemotePrompt = new WindowRemotePrompt(this);
             vm.EnsureInstalledAsync = async (state, reason) =>
                 await InstallWindow.ShowAsync(this, state, reason, allowDismiss: false) == InstallChoice.Installed;
             vm.PropertyChanged += (_, args) =>
@@ -257,6 +259,39 @@ public partial class MainWindow : Window
         var dialog = new RestoreWindow { DataContext = dialogVm };
         await dialog.ShowDialog(this);
         return dialogVm.Result;
+    }
+
+    /// <summary>
+    /// Botão "Remoto…" da origem ou do destino: lista os favoritos SFTP para preencher o campo e dá acesso ao cadastro.
+    /// </summary>
+    private void OnFavoritesClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel vm) return;
+        bool isSource = Equals(button.Tag, "source");
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+        foreach (var favorite in vm.Favorites)
+        {
+            var item = new MenuItem
+            {
+                Header = new StackPanel
+                {
+                    Spacing = 1,
+                    Children =
+                    {
+                        new TextBlock { Text = favorite.Name, FontWeight = Avalonia.Media.FontWeight.SemiBold },
+                        new TextBlock { Text = favorite.Address, Classes = { "caption", "mono" } }
+                    }
+                }
+            };
+            var chosen = favorite;
+            item.Click += (_, _) => vm.UseFavorite(chosen, isSource);
+            menu.Items.Add(item);
+        }
+        if (vm.Favorites.Count > 0) menu.Items.Add(new Separator());
+        var manage = new MenuItem { Header = vm.Favorites.Count > 0 ? "Gerenciar favoritos…" : "Cadastrar servidor SFTP…" };
+        manage.Click += async (_, _) => await FavoritesWindow.ShowAsync(this, vm, isSource);
+        menu.Items.Add(manage);
+        menu.ShowAt(button);
     }
 
     /// <summary>

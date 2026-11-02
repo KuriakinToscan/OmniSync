@@ -146,3 +146,5 @@ OmniSync/
 ## 📄 Licença
 
 Distribuído sob a **Licença MIT**. Consulte o arquivo [LICENSE](LICENSE) para mais informações.
+
+O acesso SFTP usa a biblioteca [SSH.NET](https://github.com/sshnet/SSH.NET) (licença MIT).

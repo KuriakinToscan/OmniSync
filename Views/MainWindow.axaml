@@ -175,11 +175,17 @@
                                                 <TextBlock Text="Escolher pasta…" />
                                             </StackPanel>
                                         </Button>
+                                        <Button Classes="secondary" Click="OnFavoritesClick" Tag="source"
+                                                ToolTip.Tip="Servidores SFTP salvos (NAS, servidor do órgão)">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <TextBlock Text="Remoto…" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button Classes="ghost" Command="{Binding OpenSideFolderCommand}" CommandParameter="source"
                                                 Content="{Binding OpenInFileManagerText}" />
                                     </WrapPanel>
                                     <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
-                                             PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
+                                             PlaceholderText="Ex.: E:\Projetos, /home/usuario/docs ou sftp://usuario@servidor/pasta"
                                              ToolTip.Tip="{Binding SourcePath}"
                                              LostFocus="OnPathBoxLostFocus" x:Name="SourcePathBox"
                                              AutomationProperties.Name="Diretório de origem" />
@@ -188,7 +194,7 @@
                             <PathIcon Grid.Column="1" Data="{StaticResource IconArrowRight}" Width="26" Height="26" Classes="accent-text" />
                             <Border Grid.Column="2" Classes="card" Padding="18,16" MinHeight="150">
                                 <DockPanel>
-                                    <TextBlock DockPanel.Dock="Top" Text="2 · DESTINO (LOCAL OU NAS)" Classes="eyebrow" Margin="0,0,0,10" />
+                                    <TextBlock DockPanel.Dock="Top" Text="2 · DESTINO (LOCAL, REDE OU SFTP)" Classes="eyebrow" Margin="0,0,0,10" />
                                     <WrapPanel DockPanel.Dock="Bottom" ItemSpacing="8" LineSpacing="8" Margin="0,12,0,0">
                                         <Button Classes="secondary" Command="{Binding BrowseDestinationCommand}">
                                             <StackPanel Orientation="Horizontal" Spacing="7">
@@ -196,12 +202,18 @@
                                                 <TextBlock Text="Escolher pasta…" />
                                             </StackPanel>
                                         </Button>
+                                        <Button Classes="secondary" Click="OnFavoritesClick" Tag="destination"
+                                                ToolTip.Tip="Servidores SFTP salvos (NAS, servidor do órgão)">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <TextBlock Text="Remoto…" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button Classes="ghost" Command="{Binding OpenSideFolderCommand}" CommandParameter="destination"
                                                 Content="{Binding OpenInFileManagerText}" />
                                     </WrapPanel>
                                     <StackPanel Spacing="6" VerticalAlignment="Top">
                                         <TextBox Classes="mono" Text="{Binding DestinationPath}"
-                                                 PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
+                                                 PlaceholderText="Ex.: \\nas\backup, /mnt/nas/backup ou sftp://usuario@servidor/pasta"
                                                  ToolTip.Tip="{Binding DestinationPath}"
                                                  LostFocus="OnPathBoxLostFocus" x:Name="DestinationPathBox"
                                                  AutomationProperties.Name="Diretório de destino" />
