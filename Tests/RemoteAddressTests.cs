@@ -82,5 +82,6 @@ public class RemoteAddressTests
         Assert.Null(PathHelper.DescribePairProblem("sftp://ana@nas/dados", "sftp://ana@outro/dados"));
         Assert.Null(PathHelper.DescribePairProblem(Path.GetTempPath(), "sftp://ana@nas/tmp"));
         Assert.Equal("sftp://ana@nas/x", PathHelper.ExpandUserPath("  sftp://ana@nas/x "));
+        Assert.Contains("usuário", PathHelper.DescribePairProblem(Path.GetTempPath(), "sftp://nas/dados"));
     }
 }

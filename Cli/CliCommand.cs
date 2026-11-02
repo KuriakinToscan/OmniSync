@@ -48,7 +48,14 @@ public enum CliExitCode
     /// <summary>Erro inesperado (detalhes no log).</summary>
     UnexpectedError = 5,
     /// <summary>A mesma tarefa já está sendo sincronizada (pela interface ou por outro agendamento); nada foi feito.</summary>
-    AlreadyRunning = 6
+    AlreadyRunning = 6,
+    /// <summary>
+    /// Conexão remota pendente de você: falta a senha no cofre, o servidor recusou a senha guardada, ou a chave do
+    /// servidor é nova ou mudou. Nada foi feito; abra o OmniSync e analise a tarefa uma vez.
+    /// </summary>
+    RemotePending = 7,
+    /// <summary>Servidor remoto inacessível (endereço, porta, rede) ou arquivo de chave ilegível; nada foi feito.</summary>
+    RemoteUnavailable = 8
 }
 
 /// <summary>
@@ -221,7 +228,8 @@ public sealed record CliCommand(
 
         Códigos de saída: 0 sem falhas; 1 com falhas; 2 abortado por remoção em massa;
         3 argumento, tarefa ou caminho inválido; 4 interrompido; 5 erro inesperado;
-        6 a tarefa já está sendo sincronizada.
+        6 a tarefa já está sendo sincronizada; 7 conexão remota pendente de você (senha ou
+        chave do servidor: abra o OmniSync e analise a tarefa uma vez); 8 servidor remoto inacessível.
 
         No PowerShell, use "| Out-Host" para esperar o fim e ver a saída:
           .\OmniSync.exe --sincronizar "Volume" | Out-Host ; $LASTEXITCODE

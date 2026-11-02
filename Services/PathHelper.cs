@@ -206,6 +206,11 @@ public static class PathHelper
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
+            // Endereço sftp:// malformado: a mensagem diz o que falta; caminho local estranho fica para a análise
+            if (ex is ArgumentException && (RemoteAddress.IsRemote(sourceDir) || RemoteAddress.IsRemote(destDir)))
+            {
+                return $"Endereço remoto inválido: {ex.Message}";
+            }
             return null;
         }
 

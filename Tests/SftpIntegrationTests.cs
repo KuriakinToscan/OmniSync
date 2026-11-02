@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using OmniSync.Cli;
 using OmniSync.Models;
 using OmniSync.Services;
 using OmniSync.Services.FileSystems;
@@ -358,6 +359,38 @@ public sealed class SftpIntegrationTests : IDisposable
         Assert.Equal("xyz", File.ReadAllText(Path.Combine(dst, "c.txt")));
         Assert.Equal("abc", File.ReadAllText(Path.Combine(dst, "old", "c.txt")));
         Assert.Equal(NewTime, File.GetLastWriteTimeUtc(Path.Combine(dst, "a.txt")));
+    }
+
+    /// <summary>
+    /// Linha de comando agendada com destino SFTP: sem senha guardada para com o código 7, sem alterar nada e com
+    /// aviso; depois de conectar uma vez pela interface (senha no cofre), sincroniza sem perguntar.
+    /// </summary>
+    [SftpFact]
+    public async Task Cli_RemotePendingThenRuns()
+    {
+        var src = Path.Combine(_local, "Campo");
+        WriteLocal(Path.Combine(src, "a.txt"), "a", NewTime);
+        var settingsPath = Path.Combine(_local, "dados", "settings.json");
+        var settings = new AppSettings();
+        settings.Profiles.Add(new SyncProfile { Name = "Remota", SourcePath = src, DestinationPath = _remote!.ToString(), UseSourceFolderNameInDestination = true });
+        SettingsService.Save(settings, settingsPath);
+        var command = new CliCommand(CliAction.Run, "Remota", CliConflictPolicy.Keep, null, false, Scheduled: true);
+
+        var output = new StringWriter();
+        var first = new CliRunner(new SyncEngine(), output, settingsPath, new ScheduleTests.FakeScheduler());
+        Assert.Equal(CliExitCode.RemotePending, await first.RunAsync(command, CancellationToken.None));
+        Assert.Contains("Abra o OmniSync", output.ToString());
+        Assert.NotNull(first.Notification);
+        Assert.True(first.Notification!.IsProblem);
+
+        await ConnectTrustingAsync();
+        RemoteConnections.DisconnectAll();
+        RemoteConnections.ForgetSecret(_remote, fromStore: false);
+
+        var second = new CliRunner(new SyncEngine(), new StringWriter(), settingsPath, new ScheduleTests.FakeScheduler());
+        Assert.Equal(CliExitCode.Success, await second.RunAsync(command, CancellationToken.None));
+        var fs = RemoteConnections.Get(_remote);
+        Assert.Equal("a", ReadRemote(fs, _remote + "/Campo/a.txt"));
     }
 
     /// <summary>Origem remota inexistente: mesma mensagem do local, sem travar.</summary>
