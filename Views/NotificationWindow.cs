@@ -3,17 +3,21 @@ using System.Diagnostics;
 using System.IO;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using OmniSync.Cli;
 using OmniSync.Services;
+using OmniSync.Services.Scheduling;
 
 namespace OmniSync.Views;
 
 /// <summary>
 /// Janela pequena de aviso ao fim de uma execução agendada, no canto inferior direito, sempre à frente.
-/// Fecha sozinha após <see cref="AutoCloseSeconds"/> segundos, salvo quando o aviso é um problema.
+/// Fecha sozinha após <see cref="AutoCloseSeconds"/> segundos, salvo quando o aviso é um problema ou o mouse
+/// passa sobre ela. Quando repetir a execução faz sentido, oferece "Adiar" (15 min, 1 h ou 4 h): a execução é
+/// repetida no horário e só avisa de novo se ainda houver o que avisar.
 /// </summary>
 public sealed class NotificationWindow : Window
 {
@@ -22,12 +26,19 @@ public sealed class NotificationWindow : Window
 
     private const double ScreenMargin = 16;
 
+    private readonly CliNotification _notification;
+    private readonly TextBlock _message;
+    private readonly TextBlock _error;
+    private readonly StackPanel _buttons;
+    private IDisposable? _autoClose;
+
     /// <summary>
     /// Cria a janela de aviso.
     /// </summary>
     /// <param name="notification">Conteúdo do aviso.</param>
     public NotificationWindow(CliNotification notification)
     {
+        _notification = notification;
         Title = "OmniSync";
         Width = 420;
         SizeToContent = SizeToContent.Height;
@@ -50,13 +61,17 @@ public sealed class NotificationWindow : Window
         close.Classes.Add("secondary");
         close.Click += (_, _) => Close();
 
+        _message = new TextBlock { Text = notification.Message, TextWrapping = TextWrapping.Wrap };
+        _error = new TextBlock { TextWrapping = TextWrapping.Wrap, IsVisible = false };
+        _error.Classes.Add("conflict");
         var text = new StackPanel
         {
             Spacing = 6,
             Children =
             {
                 new TextBlock { Text = notification.Title, FontSize = 15, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap },
-                new TextBlock { Text = notification.Message, TextWrapping = TextWrapping.Wrap }
+                _message,
+                _error
             }
         };
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 12 };
@@ -64,28 +79,97 @@ public sealed class NotificationWindow : Window
         Grid.SetColumn(text, 1);
         header.Children.Add(text);
 
+        _buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8
+        };
+        if (notification.Snooze != null)
+        {
+            _buttons.Children.Add(BuildSnoozeButton());
+        }
+        _buttons.Children.Add(close);
+        _buttons.Children.Add(open);
+
         Content = new StackPanel
         {
             Margin = new Thickness(20, 18, 20, 16),
             Spacing = 14,
-            Children =
-            {
-                header,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Spacing = 8,
-                    Children = { close, open }
-                }
-            }
+            Children = { header, _buttons }
         };
 
         Opened += (_, _) => Dispatcher.UIThread.Post(PlaceBottomRight, DispatcherPriority.Loaded);
         if (!notification.IsProblem)
         {
-            DispatcherTimer.RunOnce(Close, TimeSpan.FromSeconds(AutoCloseSeconds));
+            _autoClose = DispatcherTimer.RunOnce(Close, TimeSpan.FromSeconds(AutoCloseSeconds));
+            // Com o mouse sobre o aviso, o usuário está lendo ou escolhendo: não fecha sozinho
+            PointerEntered += (_, _) => StopAutoClose();
         }
+    }
+
+    /// <summary>
+    /// Botão "Adiar" com os intervalos de <see cref="SnoozeService.Options"/>.
+    /// </summary>
+    private Button BuildSnoozeButton()
+    {
+        var flyout = new MenuFlyout { Placement = PlacementMode.TopEdgeAlignedRight };
+        foreach (var delay in SnoozeService.Options)
+        {
+            var item = new MenuItem { Header = SnoozeService.Describe(delay) };
+            item.Click += (_, _) => SnoozeFor(delay);
+            flyout.Items.Add(item);
+        }
+        flyout.Opened += (_, _) => StopAutoClose();
+
+        var snooze = new Button { Content = "Adiar ▾", Flyout = flyout };
+        snooze.Classes.Add("secondary");
+        ToolTip.SetTip(snooze, "Repetir mais tarde e avisar de novo só se ainda houver o que fazer");
+        return snooze;
+    }
+
+    /// <summary>
+    /// Registra o adiamento; em caso de sucesso, mostra o novo horário e fecha em seguida.
+    /// </summary>
+    private void SnoozeFor(TimeSpan delay)
+    {
+        var request = _notification.Snooze;
+        var exe = Environment.ProcessPath;
+        if (request == null || string.IsNullOrEmpty(exe)) return;
+
+        _buttons.IsEnabled = false;
+        string? error;
+        try
+        {
+            error = new SnoozeService(SystemScheduler.Current, request.StateDirectory).Snooze(request, exe, DateTime.Now, delay);
+        }
+        catch (Exception ex)
+        {
+            error = ErrorMessages.Translate(ex);
+            FileLogService.Write($"[ERRO] Adiamento não registrado: {ErrorMessages.ForLog(ex)}");
+        }
+
+        if (error != null)
+        {
+            _error.Text = $"Não foi possível adiar: {error}";
+            _error.IsVisible = true;
+            _buttons.IsEnabled = true;
+            Dispatcher.UIThread.Post(PlaceBottomRight, DispatcherPriority.Loaded);
+            return;
+        }
+
+        var due = DateTime.Now + delay;
+        _message.Text = $"Adiado para as {due:HH:mm}{(due.Date != DateTime.Today ? $" de {due:dd/MM}" : "")}. " +
+                        "O OmniSync verifica de novo nesse horário e só avisa se ainda houver o que fazer.";
+        _error.IsVisible = false;
+        Dispatcher.UIThread.Post(PlaceBottomRight, DispatcherPriority.Loaded);
+        DispatcherTimer.RunOnce(Close, TimeSpan.FromSeconds(4));
+    }
+
+    private void StopAutoClose()
+    {
+        _autoClose?.Dispose();
+        _autoClose = null;
     }
 
     private void PlaceBottomRight()

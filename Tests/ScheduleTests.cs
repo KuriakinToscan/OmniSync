@@ -484,6 +484,182 @@ public class ScheduleTests : IDisposable
         Assert.True(runner.Notification!.IsProblem);
     }
 
+    // ------------------------------------------------------------------ Adiar (v1.5.1)
+
+    /// <summary>
+    /// Análise agendada com pendências oferece "Adiar" com os mesmos argumentos do agendamento.
+    /// </summary>
+    [Fact]
+    public async Task ScheduledAnalyze_ShouldOfferSnoozeWithSameArguments()
+    {
+        var (settingsPath, id) = CreateTask(orphans: 1);
+        var runner = new CliRunner(new SyncEngine(), new StringWriter(), settingsPath, new FakeScheduler());
+
+        await runner.RunAsync(new CliCommand(CliAction.Analyze, "Volume", Scheduled: true), CancellationToken.None);
+
+        var snooze = runner.Notification!.Snooze;
+        Assert.NotNull(snooze);
+        Assert.Equal(id, snooze!.TaskId);
+        Assert.Equal(new[] { "--analisar", id.ToString("D"), "--agendado" }, snooze.Arguments);
+        Assert.Equal(Path.Combine(_root, "snooze"), snooze.StateDirectory);
+    }
+
+    /// <summary>
+    /// Sincronizada sem falhas e remoção em massa abortada não oferecem "Adiar" (repetir não muda o resultado).
+    /// </summary>
+    [Fact]
+    public async Task SuccessAndMassAbort_ShouldNotOfferSnooze()
+    {
+        var (okPath, okId) = CreateTask(orphans: 0);
+        var ok = new CliRunner(new SyncEngine(), new StringWriter(), okPath, new FakeScheduler());
+        await ok.RunAsync(new CliCommand(CliAction.Run, okId.ToString(), Scheduled: true), CancellationToken.None);
+        Assert.Null(ok.Notification!.Snooze);
+
+        Dispose();
+        Directory.CreateDirectory(_root);
+        var (massPath, massId) = CreateTask(orphans: 12);
+        var mass = new CliRunner(new SyncEngine(), new StringWriter(), massPath, new FakeScheduler());
+        await mass.RunAsync(new CliCommand(CliAction.Run, massId.ToString(), Scheduled: true), CancellationToken.None);
+        Assert.Null(mass.Notification!.Snooze);
+    }
+
+    /// <summary>
+    /// Adiar registra um disparo único no horário certo e grava o registro; adiar de novo substitui o anterior.
+    /// </summary>
+    [Fact]
+    public void Snooze_ShouldRegisterOnceAndReplacePrevious()
+    {
+        var scheduler = new FakeScheduler();
+        var service = new SnoozeService(scheduler, Path.Combine(_root, "snooze"));
+        var request = new SnoozeRequest(Id, "Campo", new[] { "--analisar", Id.ToString(), "--agendado" }, Path.Combine(_root, "snooze"));
+        var now = new DateTime(2026, 11, 2, 14, 0, 0, 500);
+
+        Assert.Null(service.Snooze(request, "/opt/OmniSync", now, TimeSpan.FromMinutes(15)));
+        var first = service.Read(Id)!;
+        Assert.Equal(new DateTime(2026, 11, 2, 14, 15, 0), first.DueLocal);
+        Assert.Equal(SnoozeService.BuildName(Id, first.DueLocal), first.Name);
+        Assert.Equal(request.Arguments, scheduler.Once[first.Name].Args);
+
+        Assert.Null(service.Snooze(request, "/opt/OmniSync", now, TimeSpan.FromHours(1)));
+        var second = service.Read(Id)!;
+        Assert.Equal(new DateTime(2026, 11, 2, 15, 0, 0), second.DueLocal);
+        Assert.Single(scheduler.Once);
+        Assert.True(scheduler.Once.ContainsKey(second.Name));
+    }
+
+    /// <summary>
+    /// Falha do agendador ao adiar devolve a mensagem e não deixa registro.
+    /// </summary>
+    [Fact]
+    public void Snooze_SchedulerFailure_ShouldReturnErrorWithoutState()
+    {
+        var scheduler = new FakeScheduler { FailOnce = "recusado" };
+        var service = new SnoozeService(scheduler, Path.Combine(_root, "snooze"));
+        var request = new SnoozeRequest(Id, "Campo", new[] { "--analisar" }, Path.Combine(_root, "snooze"));
+        Assert.Equal("recusado", service.Snooze(request, "/opt/OmniSync", DateTime.Now, TimeSpan.FromHours(1)));
+        Assert.Null(service.Read(Id));
+    }
+
+    /// <summary>
+    /// Execução agendada antes do horário do adiamento (agendamento normal) cancela o adiamento; a execução do
+    /// próprio adiamento (horário chegou) só apaga o registro.
+    /// </summary>
+    [Fact]
+    public void OnScheduledRun_ShouldCancelOnlyFutureSnooze()
+    {
+        var scheduler = new FakeScheduler();
+        var service = new SnoozeService(scheduler, Path.Combine(_root, "snooze"));
+        var request = new SnoozeRequest(Id, "Campo", new[] { "--analisar" }, Path.Combine(_root, "snooze"));
+        var now = new DateTime(2026, 11, 2, 14, 0, 0);
+
+        service.Snooze(request, "/opt/OmniSync", now, TimeSpan.FromHours(4));
+        service.OnScheduledRun(Id, now.AddHours(1));
+        Assert.Empty(scheduler.Once);
+        Assert.Null(service.Read(Id));
+
+        service.Snooze(request, "/opt/OmniSync", now, TimeSpan.FromMinutes(15));
+        var name = service.Read(Id)!.Name;
+        service.OnScheduledRun(Id, now.AddMinutes(15).AddSeconds(2));
+        Assert.True(scheduler.Once.ContainsKey(name));
+        Assert.Null(service.Read(Id));
+    }
+
+    /// <summary>
+    /// A execução agendada pela linha de comando aplica a regra acima a partir da pasta de dados.
+    /// </summary>
+    [Fact]
+    public async Task ScheduledRun_ShouldCancelPendingSnooze()
+    {
+        var (settingsPath, id) = CreateTask(orphans: 0);
+        var scheduler = new FakeScheduler();
+        var snoozeDir = Path.Combine(_root, "snooze");
+        new SnoozeService(scheduler, snoozeDir).Snooze(new SnoozeRequest(id, "Volume", new[] { "--analisar" }, snoozeDir),
+            "/opt/OmniSync", DateTime.Now, TimeSpan.FromHours(4));
+        Assert.Single(scheduler.Once);
+
+        var runner = new CliRunner(new SyncEngine(), new StringWriter(), settingsPath, scheduler);
+        await runner.RunAsync(new CliCommand(CliAction.Analyze, id.ToString(), Scheduled: true), CancellationToken.None);
+
+        Assert.Empty(scheduler.Once);
+        Assert.False(File.Exists(Path.Combine(snoozeDir, $"{id:D}.txt")));
+    }
+
+    /// <summary>
+    /// XML do disparo único: gatilho de horário único que expira e se apaga, mesmos argumentos.
+    /// </summary>
+    [Fact]
+    public void WindowsOnceXml_ShouldUseTimeTriggerWithExpiry()
+    {
+        var when = new DateTime(2026, 11, 2, 15, 10, 0);
+        var name = SnoozeService.BuildName(Id, when);
+        var xml = WindowsTaskScheduler.BuildOnceXml(name, "OmniSync: Campo (adiado)",
+            new[] { "--analisar", Id.ToString(), "--agendado" }, @"C:\Apps\OmniSync.exe", @"PC\ana", when);
+        XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+        var trigger = xml.Descendants(ns + "TimeTrigger").Single();
+        Assert.Equal("2026-11-02T15:10:00", trigger.Element(ns + "StartBoundary")!.Value);
+        Assert.Equal("2026-11-03T15:10:00", trigger.Element(ns + "EndBoundary")!.Value);
+        Assert.Equal("PT1H", xml.Descendants(ns + "DeleteExpiredTaskAfter").Single().Value);
+        Assert.Equal("true", xml.Descendants(ns + "StartWhenAvailable").Single().Value);
+        Assert.Equal($@"\OmniSync\{Id:D}-adiado-20261102-151000", xml.Descendants(ns + "URI").Single().Value);
+        Assert.Equal($"--analisar {Id} --agendado", xml.Descendants(ns + "Arguments").Single().Value);
+    }
+
+    /// <summary>
+    /// O agendamento normal continua sem expiração.
+    /// </summary>
+    [Fact]
+    public void WindowsScheduleXml_ShouldNotExpire()
+    {
+        var xml = WindowsTaskScheduler.BuildTaskXml("Campo", Id, new SyncSchedule { Enabled = true }, @"C:\Apps\OmniSync.exe", @"PC\ana", DateTime.Now);
+        XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+        Assert.Empty(xml.Descendants(ns + "DeleteExpiredTaskAfter"));
+    }
+
+    /// <summary>
+    /// systemd-run: timer transitório no horário exato, descartado depois, com o executável e os argumentos.
+    /// </summary>
+    [Fact]
+    public void SystemdOnceArguments_ShouldUseTransientCalendarTimer()
+    {
+        var when = new DateTime(2026, 11, 2, 15, 10, 0);
+        var args = SystemdTimerScheduler.BuildOnceArguments(SnoozeService.BuildName(Id, when), "OmniSync: Campo (adiado)",
+            new[] { "--analisar", Id.ToString(), "--agendado" }, "/opt/OmniSync", when);
+        Assert.Contains($"--unit=omnisync-{Id:D}-adiado-20261102-151000", args);
+        Assert.Contains("--on-calendar=2026-11-02 15:10:00", args);
+        Assert.Contains("--collect", args);
+        int sep = args.ToList().IndexOf("--");
+        Assert.Equal(new[] { "/opt/OmniSync", "--analisar", Id.ToString(), "--agendado" }, args.Skip(sep + 1));
+    }
+
+    /// <summary>
+    /// Textos do menu "Adiar".
+    /// </summary>
+    [Fact]
+    public void SnoozeOptions_ShouldDescribeInPortuguese()
+    {
+        Assert.Equal(new[] { "15 minutos", "1 hora", "4 horas" }, SnoozeService.Options.Select(SnoozeService.Describe));
+    }
+
     // ------------------------------------------------------------------ Instalação
 
     /// <summary>
@@ -560,5 +736,14 @@ public class ScheduleTests : IDisposable
         public string? Register(SyncProfile profile, SyncSchedule schedule, string executable) { Registered.Add(profile.Id); return null; }
         public string? Unregister(Guid taskId) { Registered.Remove(taskId); return null; }
         public bool Exists(Guid taskId) => Registered.Contains(taskId);
+        public Dictionary<string, (IReadOnlyList<string> Args, DateTime When)> Once { get; } = new();
+        public string? FailOnce { get; set; }
+        public string? RegisterOnce(string name, string description, IReadOnlyList<string> arguments, string executable, DateTime when)
+        {
+            if (FailOnce != null) return FailOnce;
+            Once[name] = (arguments, when);
+            return null;
+        }
+        public string? UnregisterOnce(string name) { Once.Remove(name); return null; }
     }
 }

@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\omnisync.ico</ApplicationIcon>
-    <Version>1.5.0</Version>
+    <Version>1.5.1</Version>
     <Authors>OmniSync Contributors</Authors>
     <Description>Sincronizador gráfico multiplataforma (Windows e Linux) para drives locais e compartilhamentos de rede/NAS com preservação de versões (old/) e lixeira inteligente (lixo/).</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
