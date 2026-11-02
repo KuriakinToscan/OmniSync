@@ -160,6 +160,25 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Botão do relógio ao lado do horário: abre o mostrador com o horário atual; OK preenche o campo e salva o
+    /// agendamento, como o Enter.
+    /// </summary>
+    private void OnScheduleClockClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        ClockTimePicker.ShowFlyout(ScheduleClockButton, vm.ScheduleTime, "Horário do agendamento",
+            Avalonia.Controls.PlacementMode.BottomEdgeAlignedLeft, time =>
+            {
+                vm.SetScheduleTime(time);
+                if (vm.SaveScheduleCommand.CanExecute(null))
+                {
+                    vm.SaveScheduleCommand.Execute(null);
+                }
+                ScheduleTimeBox.Focus();
+            });
+    }
+
+    /// <summary>
     /// Ao sair do campo de horário, mostra o horário no formato HH:MM.
     /// </summary>
     private void OnScheduleTimeLostFocus(object? sender, RoutedEventArgs e) => (DataContext as MainViewModel)?.NormalizeScheduleTimeText();

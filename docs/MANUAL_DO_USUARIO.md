@@ -220,7 +220,7 @@ No cartão **Agendamento**, na tela de configuração da tarefa:
 1. Ligue a chave **Ligado**.
 2. **O que fazer**: *Sincronizar* (sem perguntas) ou *Só analisar e avisar* (não altera nada; avisa quando há alterações pendentes).
 3. **Quando**: *Todo dia*, *Dias da semana* (marque os dias) ou *Ao entrar no sistema* (5 minutos após o logon).
-4. **Horário**, para as opções diária e semanal: digite `18:30`, `1830`, `7h05` ou `7`. Enter confirma e salva.
+4. **Horário**, para as opções diária e semanal: digite `18:30`, `1830`, `7h05` ou `7` (Enter confirma e salva), ou clique no botão do relógio ao lado do campo. No relógio, clique na hora (anel externo 00–11, interno 12–23) e depois nos minutos; um clique arredonda para 5 em 5 e arrastando dá para escolher minuto a minuto. As setas do teclado também mudam o valor. **OK** preenche o campo e salva.
 5. **Em conflito, substituir quando a origem for mais nova**: desmarcado, o destino é sempre mantido. Marcado, a versão anterior vai para `old/`. Destino mais novo nunca é substituído.
 6. Clique em **Salvar agendamento**. Para desligar, desligue a chave e salve.
 

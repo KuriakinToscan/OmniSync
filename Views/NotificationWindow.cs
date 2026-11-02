@@ -17,7 +17,7 @@ namespace OmniSync.Views;
 /// Janela pequena de aviso ao fim de uma execução agendada, no canto inferior direito, sempre à frente.
 /// Avisos informativos sem ação pendente (ex.: "sincronizada") fecham sozinhos após <see cref="AutoCloseSeconds"/>
 /// segundos, salvo com o mouse sobre a janela. Avisos de problema e avisos com "Adiar" ficam até o usuário escolher.
-/// "Adiar" (15 min, 1 h ou 4 h) repete a execução no horário, que só avisa de novo se ainda houver o que avisar.
+/// "Adiar" (15 min, 1 h, 4 h ou um horário escolhido no relógio) repete a execução no horário, que só avisa de novo se ainda houver o que avisar.
 /// O log registra quando o aviso aparece e como terminou.
 /// </summary>
 public sealed class NotificationWindow : Window
@@ -117,10 +117,11 @@ public sealed class NotificationWindow : Window
     }
 
     /// <summary>
-    /// Botão "Adiar" com os intervalos de <see cref="SnoozeService.Options"/>.
+    /// Botão "Adiar" com os intervalos de <see cref="SnoozeService.Options"/> e "Escolher horário…" (relógio).
     /// </summary>
     private Button BuildSnoozeButton()
     {
+        var snooze = new Button { Content = "Adiar ▾" };
         var flyout = new MenuFlyout { Placement = PlacementMode.TopEdgeAlignedRight };
         foreach (var delay in SnoozeService.Options)
         {
@@ -128,28 +129,68 @@ public sealed class NotificationWindow : Window
             item.Click += (_, _) => SnoozeFor(delay);
             flyout.Items.Add(item);
         }
+        flyout.Items.Add(new Separator());
+        var pick = new MenuItem { Header = "Escolher horário…" };
+        pick.Click += (_, _) =>
+            // Depois que o menu fecha, abre o relógio junto do mesmo botão
+            Dispatcher.UIThread.Post(() => ClockTimePicker.ShowFlyout(snooze, DefaultPickTime(DateTime.Now),
+                "Adiar até", PlacementMode.TopEdgeAlignedRight, SnoozeUntil));
+        flyout.Items.Add(pick);
         flyout.Opened += (_, _) => StopAutoClose();
 
-        var snooze = new Button { Content = "Adiar ▾", Flyout = flyout };
+        snooze.Flyout = flyout;
         snooze.Classes.Add("secondary");
         ToolTip.SetTip(snooze, "Repetir mais tarde e avisar de novo só se ainda houver o que fazer");
         return snooze;
     }
 
     /// <summary>
-    /// Registra o adiamento; em caso de sucesso, mostra o novo horário e fecha em seguida.
+    /// Horário sugerido ao abrir o relógio do Adiar: a próxima hora cheia depois de agora + 1 h
+    /// (ex.: 14:20 → 16:00), um ponto de partida que o usuário ajusta.
+    /// </summary>
+    /// <param name="now">Momento atual.</param>
+    public static TimeSpan DefaultPickTime(DateTime now)
+    {
+        var hour = (now.Hour + 2) % 24;
+        return new TimeSpan(hour, 0, 0);
+    }
+
+    /// <summary>
+    /// Adia por um intervalo do menu.
     /// </summary>
     private void SnoozeFor(TimeSpan delay)
+    {
+        var now = DateTime.Now;
+        ApplySnooze((service, request, exe) => service.Snooze(request, exe, now, delay), now + delay,
+            $"adiado por {SnoozeService.Describe(delay)}");
+    }
+
+    /// <summary>
+    /// Adia até o horário escolhido no relógio (hoje, se ainda não passou; senão amanhã).
+    /// </summary>
+    private void SnoozeUntil(TimeSpan timeOfDay)
+    {
+        var now = DateTime.Now;
+        var due = SnoozeService.NextOccurrence(now, timeOfDay);
+        ApplySnooze((service, request, exe) => service.SnoozeUntil(request, exe, now, timeOfDay), due,
+            $"adiado para as {due:HH:mm}");
+    }
+
+    /// <summary>
+    /// Registra o adiamento; em caso de sucesso, mostra o novo horário e fecha em seguida.
+    /// </summary>
+    private void ApplySnooze(Func<SnoozeService, SnoozeRequest, string, string?> register, DateTime due, string closeReason)
     {
         var request = _notification.Snooze;
         var exe = Environment.ProcessPath;
         if (request == null || string.IsNullOrEmpty(exe)) return;
 
+        StopAutoClose();
         _buttons.IsEnabled = false;
         string? error;
         try
         {
-            error = new SnoozeService(SystemScheduler.Current, request.StateDirectory).Snooze(request, exe, DateTime.Now, delay);
+            error = register(new SnoozeService(SystemScheduler.Current, request.StateDirectory), request, exe);
         }
         catch (Exception ex)
         {
@@ -166,12 +207,11 @@ public sealed class NotificationWindow : Window
             return;
         }
 
-        var due = DateTime.Now + delay;
         _message.Text = $"Adiado para as {due:HH:mm}{(due.Date != DateTime.Today ? $" de {due:dd/MM}" : "")}. " +
                         "O OmniSync verifica de novo nesse horário e só avisa se ainda houver o que fazer.";
         _error.IsVisible = false;
         Dispatcher.UIThread.Post(PlaceBottomRight, DispatcherPriority.Loaded);
-        _closeReason = $"adiado por {SnoozeService.Describe(delay)}";
+        _closeReason = closeReason;
         DispatcherTimer.RunOnce(() => CloseWith(_closeReason), TimeSpan.FromSeconds(4));
     }
 

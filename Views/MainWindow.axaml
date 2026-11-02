@@ -325,10 +325,18 @@
                                         </StackPanel>
                                         <StackPanel Spacing="6" IsVisible="{Binding ScheduleHasTime}">
                                             <TextBlock Text="Horário" FontWeight="SemiBold" />
-                                            <TextBox Text="{Binding ScheduleTimeText}" Width="110" Classes="mono" MaxLength="5"
-                                                     PlaceholderText="HH:MM" LostFocus="OnScheduleTimeLostFocus" x:Name="ScheduleTimeBox"
-                                                     ToolTip.Tip="Digite o horário: 18:30, 1830, 7h05 ou 7"
-                                                     AutomationProperties.Name="Horário" />
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBox Text="{Binding ScheduleTimeText}" Width="110" Classes="mono" MaxLength="5"
+                                                         PlaceholderText="HH:MM" LostFocus="OnScheduleTimeLostFocus" x:Name="ScheduleTimeBox"
+                                                         ToolTip.Tip="Digite o horário: 18:30, 1830, 7h05 ou 7"
+                                                         AutomationProperties.Name="Horário" />
+                                                <Button Classes="secondary" x:Name="ScheduleClockButton" Click="OnScheduleClockClick"
+                                                        Width="36" Padding="0" HorizontalContentAlignment="Center"
+                                                        ToolTip.Tip="Escolher o horário no relógio"
+                                                        AutomationProperties.Name="Escolher o horário no relógio">
+                                                    <PathIcon Data="{StaticResource IconClock}" Classes="small" />
+                                                </Button>
+                                            </StackPanel>
                                             <TextBlock Text="Use HH:MM, de 00:00 a 23:59." Classes="caption danger-text"
                                                        IsVisible="{Binding ScheduleTimeInvalid}" />
                                         </StackPanel>
