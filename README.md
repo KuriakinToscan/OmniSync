@@ -5,7 +5,7 @@
 [![Avalonia UI](https://img.shields.io/badge/Avalonia_UI-12.1-0d6efd.svg)](https://avaloniaui.net/)
 [![Platform](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux-success.svg)](#)
 
-O **OmniSync** é uma aplicação desktop multiplataforma (**Windows e Linux**) com interface gráfica nativa construída em **.NET 10** e **Avalonia UI**, projetada para sincronizar diretórios entre unidades locais (SSDs, HDs externos, pendrives) e compartilhamentos de rede (**NAS / SMB / CIFS / NFS**) com foco em **segurança contra perda de dados**.
+O **OmniSync** é uma aplicação desktop multiplataforma (**Windows e Linux**) com interface gráfica nativa construída em **.NET 10** e **Avalonia UI**, projetada para sincronizar diretórios entre unidades locais (SSDs, HDs externos, pendrives) e compartilhamentos de rede (**NAS / SMB / CIFS / NFS**) e servidores **SFTP**, com foco em **segurança contra perda de dados**.
 
 ---
 
@@ -23,6 +23,7 @@ Diferente de ferramentas tradicionais que apagam ou sobrescrevem arquivos irreve
 8. **Tarefas salvas**: cada combinação de origem, destino e opções fica salva na barra lateral, com o estado da última execução. Trocar de tarefa carrega a configuração e descarta o plano anterior.
 9. **Decisões seguras**: nenhum conflito vem pré-selecionado; decisões tomadas voltam após uma nova análise se os arquivos não mudaram; substituir uma versão mais nova do destino exige confirmação própria na revisão; origem e destino iguais ou aninhados são apontados na hora.
 10. **Agendamento e instalação**: cada tarefa pode rodar sozinha (todo dia, em dias da semana ou ao entrar no sistema), pelo Agendador de Tarefas do Windows ou pelo systemd no Linux, sincronizando ou só analisando e avisando. Ao abrir, o OmniSync oferece instalar-se numa pasta fixa do usuário, com atalhos na área de trabalho e no menu Iniciar.
+11. **Servidores SFTP (v2.0)**: origem ou destino `sftp://usuario@servidor/pasta` (NAS, servidor Linux, OpenSSH do Windows), com favoritos, senha no cofre do sistema (Gerenciador de Credenciais / libsecret), confirmação da chave do servidor e as mesmas garantias de `lixo/`, `old/` e temporário. Cada cópia é conferida pelo SHA-256 calculado no próprio servidor (ou pelo tamanho, em servidor só-SFTP); queda do servidor interrompe a execução sem deixar cópia parcial, e a próxima continua de onde parou.
 
 ### Interface
 

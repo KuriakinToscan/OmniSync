@@ -514,7 +514,7 @@
                                     </StackPanel>
                                     <Button.Flyout>
                                         <Flyout Placement="BottomEdgeAlignedRight">
-                                            <ScrollViewer MaxWidth="520" MaxHeight="320">
+                                            <ScrollViewer MaxWidth="520" MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
                                                 <ItemsControl ItemsSource="{Binding ScanWarnings}">
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate x:DataType="x:String">

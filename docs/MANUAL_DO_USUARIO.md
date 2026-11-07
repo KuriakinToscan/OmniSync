@@ -100,10 +100,15 @@ sftp://usuario@servidor:2222/volume1/backup
 - A porta padrão é 22. O caminho é o caminho completo da pasta no servidor (no OpenSSH do Windows, algo como `/C:/Users/usuario/Backup`).
 - **Remoto…**, ao lado de **Escolher pasta…**, lista os **favoritos** (servidores salvos com nome) e abre o cadastro. No cadastro:
   - informe servidor, porta, usuário, pasta e a forma de entrar (senha ou arquivo de chave, como `id_ed25519`);
-  - use **Testar conexão**: ela conecta, lista a pasta e grava, renomeia e apaga um arquivo de teste.
+  - use **Testar conexão**: ela conecta, lista a pasta e grava, renomeia e apaga um arquivo de teste. O resultado também diz como as cópias serão conferidas (veja **Conferência** abaixo).
 - **Senha:** fica no cofre do sistema, nunca no `settings.json`. No Windows é o Gerenciador de Credenciais; no Linux, o chaveiro do GNOME/KDE. Sem cofre, a senha vale só enquanto o OmniSync estiver aberto.
 - **Primeira conexão:** o OmniSync mostra a impressão digital da chave do servidor (`SHA256:…`) e pede confirmação. Se a chave mudar depois, a conexão é recusada; isso protege contra um servidor falso. Se o servidor foi reinstalado, use **Esquecer chave do servidor** no favorito.
-- **Garantias:** são as mesmas do disco local. Órfãos vão para `lixo/` e versões substituídas para `old/`, por renomeação no servidor. Cada arquivo é gravado como temporário e renomeado. A cópia é conferida por SHA-256 (no destino SFTP, isso relê o arquivo pela rede).
+- **Garantias:** são as mesmas do disco local. Órfãos vão para `lixo/` e versões substituídas para `old/`, por renomeação no servidor. Cada arquivo é gravado como temporário e renomeado.
+- **Conferência:** cada cópia é conferida antes de ocupar o lugar no destino.
+  - Normalmente, o próprio servidor calcula o SHA-256 do arquivo gravado (`sha256sum` no Linux e na maioria dos NAS; `Get-FileHash` no OpenSSH do Windows), e o OmniSync compara com o da origem. O arquivo não volta pela rede.
+  - Servidor que só aceita SFTP, sem comandos (comum com pastas isoladas por `chroot`), fica com a conferência pelo **tamanho**. O registro e o histórico dizem quantas cópias foram conferidas assim.
+  - No favorito, **Conferir cada cópia relendo o arquivo pela rede** troca para releitura com SHA-256, ao custo de dobrar o tráfego.
+- **Queda do servidor:** uma queda curta reconecta sozinha e repete o arquivo. Se o servidor não voltar, a sincronização para: o arquivo em andamento falha, os demais ficam como **não executados** e o resultado aparece como interrompido. O que já foi copiado fica no destino, e a próxima execução continua daí.
 - **Desempenho (estimativa):** cada arquivo custa idas e voltas ao servidor. Pastas com dezenas de milhares de arquivos pequenos ficam bem mais lentas que no disco local.
 - **Agendamento:** a execução agendada usa a senha do cofre e a chave já confirmada, sem perguntar nada. Se faltar uma delas, ela para com o código 7 e avisa. Abra o OmniSync e analise a tarefa uma vez para resolver.
 
@@ -149,7 +154,7 @@ Conflitos ainda em **Perguntar na hora** abrem uma janela comparativa com tamanh
 
 ## 7. Garantias de Segurança
 
-- **Nenhuma cópia parcial no destino**: cada arquivo é gravado primeiro como `nome.omnisync-tmp` e só então renomeado. Cancelamento, queda de rede ou falha removem o temporário.
+- **Nenhuma cópia parcial no destino**: cada arquivo é gravado primeiro como `nome.omnisync-tmp` e só então renomeado. Cancelamento, queda de rede ou falha removem o temporário. Se o programa fechar ou a conexão cair antes disso, o temporário que sobrar é apontado na análise seguinte e apagado na sincronização, desde que tenha mais de 1 hora (um temporário recente pode ser a cópia em andamento de outra tarefa com o mesmo destino).
 - **Substituição segura**: a nova versão é copiada antes de a atual ir para `old/`. Se a etapa final falhar, a versão anterior é devolvida ao lugar.
 - **Nunca sobrescreve**: se um arquivo surgir no destino depois da análise, o item falha com aviso em vez de sobrescrever.
 - **Origem e destino aninhados são bloqueados**: destino dentro da origem (ou o contrário) é recusado na análise.
@@ -209,8 +214,8 @@ O nome da tarefa não diferencia maiúsculas nem acentos (`"volume"` encontra `V
 | 4 | Interrompido (Ctrl+C) |
 | 5 | Erro inesperado (detalhes no log) |
 | 6 | A tarefa já está sendo sincronizada (pela interface ou por outro agendamento); nada foi feito |
-| 7 | Conexão remota precisa de você: falta a senha no cofre, a senha guardada foi recusada, ou a chave do servidor é nova ou mudou. Nada foi feito; abra o OmniSync e analise a tarefa uma vez |
-| 8 | Servidor remoto inacessível (endereço, porta, rede) ou arquivo de chave ilegível; nada foi feito |
+| 7 | Conexão remota precisa de você: falta a senha no cofre, a senha guardada foi recusada, ou a chave do servidor é nova ou mudou. Abra o OmniSync e analise a tarefa uma vez. Antes da cópia, nada foi feito; se a recusa veio ao reconectar no meio, o que já foi copiado fica |
+| 8 | Servidor remoto inacessível (endereço, porta, rede) ou arquivo de chave ilegível. Se ele cair no meio da sincronização, o que já foi copiado fica e o resto espera a próxima execução |
 
 **No PowerShell (Windows)**, acrescente `| Out-Host` para o terminal esperar o fim e mostrar a saída; o código fica em `$LASTEXITCODE`:
 

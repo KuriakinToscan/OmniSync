@@ -1378,7 +1378,8 @@ public partial class MainViewModel : ViewModelBase
             AskCount = conflicts.Count(i => i.Resolution == ConflictResolution.AskUser),
             OrphanCount = pending.Count(i => i.IsOrphan),
             DestinationFileCount = _lastDestinationFileCount,
-            Warnings = _lastScanWarnings
+            Warnings = _lastScanWarnings,
+            StaleTempCount = _lastStaleTemps.Count
         };
     }
 
