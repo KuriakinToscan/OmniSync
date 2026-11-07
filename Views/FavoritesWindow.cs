@@ -38,6 +38,7 @@ public sealed class FavoritesWindow : Window
     private readonly TextBox _passphrase = new() { PasswordChar = '•', Watermark = "Frase-senha da chave (se houver)" };
     private readonly TextBlock _secretNote = new() { TextWrapping = TextWrapping.Wrap, Classes = { "caption" } };
     private readonly TextBlock _hostKeyText = new() { TextWrapping = TextWrapping.Wrap, Classes = { "caption" } };
+    private readonly CheckBox _verifyByReading = new() { Content = "Conferir cada cópia relendo o arquivo pela rede (dobra o tráfego)" };
     private readonly Button _forgetHostKey = new() { Content = "Esquecer chave do servidor", Classes = { "ghost" } };
     private readonly TextBlock _result = new() { TextWrapping = TextWrapping.Wrap };
     private readonly StackPanel _passwordPanel;
@@ -140,6 +141,15 @@ public sealed class FavoritesWindow : Window
         form.Children.Add(_passwordPanel);
         form.Children.Add(_keyPanel);
         form.Children.Add(_secretNote);
+        form.Children.Add(new TextBlock { Text = "Conferência das cópias", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) });
+        form.Children.Add(new TextBlock
+        {
+            Classes = { "caption" },
+            TextWrapping = TextWrapping.Wrap,
+            Text = "Normalmente o próprio servidor calcula o SHA-256 de cada cópia (sha256sum ou, no Windows, Get-FileHash). " +
+                   "Servidor que só aceita SFTP fica com a conferência pelo tamanho, a não ser que você marque a opção abaixo."
+        });
+        form.Children.Add(_verifyByReading);
         form.Children.Add(new TextBlock { Text = "Chave do servidor", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) });
         form.Children.Add(_hostKeyText);
         form.Children.Add(_forgetHostKey);
@@ -200,7 +210,7 @@ public sealed class FavoritesWindow : Window
         Children = { new TextBlock { Text = label, FontWeight = FontWeight.SemiBold }, input }
     };
 
-    private static RemoteFavorite Clone(RemoteFavorite f) => new() { Id = f.Id, Name = f.Name, Address = f.Address, KeyFile = f.KeyFile };
+    private static RemoteFavorite Clone(RemoteFavorite f) => new() { Id = f.Id, Name = f.Name, Address = f.Address, KeyFile = f.KeyFile, VerifyByReading = f.VerifyByReading };
 
     private void UpdateAuthPanels()
     {
@@ -250,6 +260,7 @@ public sealed class FavoritesWindow : Window
         _useKey.IsChecked = !string.IsNullOrWhiteSpace(favorite.KeyFile);
         _usePassword.IsChecked = string.IsNullOrWhiteSpace(favorite.KeyFile);
         _keyFile.Text = favorite.KeyFile ?? string.Empty;
+        _verifyByReading.IsChecked = favorite.VerifyByReading;
         _password.Text = string.Empty;
         _passphrase.Text = string.Empty;
         _result.Text = string.Empty;
@@ -266,6 +277,7 @@ public sealed class FavoritesWindow : Window
         _port.Text = "22";
         _folder.Text = "/";
         _usePassword.IsChecked = true;
+        _verifyByReading.IsChecked = false;
         _result.Text = string.Empty;
         UpdateAuthPanels();
         UpdateHostKeyText();
@@ -319,6 +331,7 @@ public sealed class FavoritesWindow : Window
         _editing.Name = string.IsNullOrWhiteSpace(_name.Text) ? $"{address.User}@{address.Host}" : _name.Text.Trim();
         _editing.Address = address.ToString();
         _editing.KeyFile = useKey ? _keyFile.Text!.Trim() : null;
+        _editing.VerifyByReading = _verifyByReading.IsChecked == true;
 
         var secret = useKey ? _passphrase.Text : _password.Text;
         string stored = string.Empty;

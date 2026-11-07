@@ -344,7 +344,17 @@ public static class RemoteConnections
         try
         {
             client.Connect();
-            return new SftpFileSystem(client, address.WithPath("/"));
+            var endpoint = address.WithPath("/");
+            var confirmed = presented;
+            // Canal de comandos para o SHA-256 no servidor: mesmas credenciais e mesma chave de servidor já conferida
+            SshClient ShellFactory()
+            {
+                var shell = new SshClient(info) { KeepAliveInterval = TimeSpan.FromSeconds(30) };
+                shell.HostKeyReceived += (_, e) => e.CanTrust = string.Equals(confirmed, e.FingerPrintSHA256, StringComparison.Ordinal);
+                return shell;
+            }
+            bool PreferReadBack() => Settings.FindFavorite(address)?.VerifyByReading == true;
+            return new SftpFileSystem(client, endpoint, ShellFactory, PreferReadBack);
         }
         catch (Exception ex) when (presented != null && !string.Equals(known, presented, StringComparison.Ordinal))
         {

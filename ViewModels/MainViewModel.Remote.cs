@@ -115,12 +115,14 @@ public partial class MainViewModel
                 int count = fs.ListDirectory(folder).Count;
                 var probe = fs.Combine(folder, ".omnisync-teste-" + Guid.NewGuid().ToString("N")[..8]);
                 var renamed = probe + "-ok";
+                string check;
                 try
                 {
                     using (var stream = fs.CreateNew(probe, 2, readBack: false))
                     {
                         stream.Write("ok"u8);
                     }
+                    check = DescribeServerCheck(fs, probe);
                     fs.MoveFile(probe, renamed);
                     fs.DeleteFile(renamed);
                 }
@@ -130,7 +132,7 @@ public partial class MainViewModel
                     PathHelper.TryDeleteFile(fs, renamed);
                     return (false, $"Conectou e listou a pasta ({PtText.Count(count, "item", "itens")}), mas não conseguiu gravar e renomear: {ex.Message}");
                 }
-                return (true, $"Conexão OK: a pasta {address.Path} tem {PtText.Count(count, "item", "itens")}, e gravar, renomear e apagar funcionaram.");
+                return (true, $"Conexão OK: a pasta {address.Path} tem {PtText.Count(count, "item", "itens")}, e gravar, renomear e apagar funcionaram. {check}");
             });
         }
         catch (RemoteAccessException ex)
@@ -141,6 +143,30 @@ public partial class MainViewModel
         {
             return (false, ErrorMessages.Translate(ex));
         }
+    }
+
+    /// <summary>
+    /// Confere o SHA-256 calculado pelo servidor sobre o arquivo de teste e descreve a conferência que as cópias terão.
+    /// </summary>
+    private static string DescribeServerCheck(SftpFileSystem fs, string probe)
+    {
+        var tool = fs.ServerHashCommand;
+        if (tool == null)
+        {
+            return "Conferência das cópias: só pelo tamanho, porque o servidor não executa comandos de SHA-256" +
+                   (fs.CopyCheck == CopyCheck.ReadBack ? " (o favorito pede releitura pela rede, então elas terão SHA-256)." : ".");
+        }
+        var hash = fs.ComputeSha256OnServer(probe);
+        if (hash == null)
+        {
+            return $"O servidor tem {tool}, mas não calculou o SHA-256 do arquivo de teste (o caminho no shell deve ser diferente do SFTP). " +
+                   "Conferência das cópias: só pelo tamanho.";
+        }
+        if (!hash.AsSpan().SequenceEqual(System.Security.Cryptography.SHA256.HashData("ok"u8)))
+        {
+            return $"Atenção: o SHA-256 que o servidor calculou ({tool}) não confere com o arquivo de teste. As cópias para este servidor vão falhar na conferência.";
+        }
+        return $"Conferência das cópias: SHA-256 calculado pelo servidor ({tool}).";
     }
 
     /// <summary>Configurações remotas sobre as da janela (gravadas junto com as tarefas).</summary>

@@ -42,6 +42,9 @@ public sealed class RunRecord
     /// <summary>Falhas.</summary>
     public int Failed { get; set; }
 
+    /// <summary>Cópias conferidas só pelo tamanho (servidor remoto sem SHA-256); 0 quando todas tiveram SHA-256.</summary>
+    public int VerifiedBySize { get; set; }
+
     /// <summary>Resumo em uma linha, em português.</summary>
     public string Summary { get; set; } = string.Empty;
 

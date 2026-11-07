@@ -59,4 +59,14 @@ public interface ISyncEngine
         IProgress<SyncProgressReport>? progress,
         IProgress<string>? logger,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Apaga os temporários de execução anterior listados pela análise (<see cref="ScanResult.StaleTempFiles"/>),
+    /// conferindo de novo, um a um, se ainda existem e continuam com mais de 1 hora. Falhas só vão para o log.
+    /// </summary>
+    /// <param name="destDir">Pasta de destino da análise.</param>
+    /// <param name="files">Temporários encontrados na análise.</param>
+    /// <param name="logger">Canal opcional de log.</param>
+    /// <returns>Quantos foram apagados.</returns>
+    int RemoveStaleTempFiles(string destDir, IReadOnlyList<string> files, IProgress<string>? logger) => 0;
 }

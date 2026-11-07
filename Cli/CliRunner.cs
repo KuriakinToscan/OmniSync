@@ -257,6 +257,11 @@ public sealed class CliRunner
             return CliExitCode.MassRemovalAborted;
         }
 
+        if (scan.StaleTempFiles.Count > 0)
+        {
+            _engine.RemoveStaleTempFiles(dest, scan.StaleTempFiles, logger);
+        }
+
         SyncResult? result = null;
         bool cancelled = false;
         try
@@ -286,11 +291,12 @@ public sealed class CliRunner
             return CliExitCode.Cancelled;
         }
 
-        var done = NewRecord(result!.HasFailures ? "falhas" : "ok", result.Summary);
+        var done = NewRecord(result!.WasAborted ? "interrompido" : result.HasFailures ? "falhas" : "ok", result.HistorySummary);
         done.Copied = result.Copied;
         done.Replaced = result.Replaced;
         done.Trashed = result.Trashed;
         done.Failed = result.Failed;
+        done.VerifiedBySize = result.VerifiedBySize;
         RunHistory.Append(profile.Id, done, _historyDirectory);
 
         _output.WriteLine();
@@ -304,6 +310,18 @@ public sealed class CliRunner
             _output.WriteLine($"  … e mais {result.Failed - 20:N0} (detalhes no log).");
         }
         _output.WriteLine($"Log: {FileLogService.CurrentLogFile}");
+
+        if (result.WasAborted)
+        {
+            // Servidor caiu no meio: o que foi copiado fica, o resto espera a próxima execução
+            var message = $"{result.AbortReason} {result.Summary}. O que já foi copiado está no destino; a próxima execução continua daí." +
+                          (result.AbortRequiresUser ? " Abra o OmniSync, selecione a tarefa e clique em Analisar." : string.Empty);
+            Report($"[ERRO] Interrompida: {message}", alwaysShow: true);
+            Notify(command,
+                result.AbortRequiresUser ? $"{profile.Name}: o servidor precisa de você" : $"{profile.Name}: servidor inacessível",
+                message, problem: true, snooze: result.AbortRequiresUser ? null : BuildSnooze(command, profile));
+            return result.AbortRequiresUser ? CliExitCode.RemotePending : CliExitCode.RemoteUnavailable;
+        }
 
         if (result.HasFailures)
         {

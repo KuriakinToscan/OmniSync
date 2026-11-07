@@ -126,12 +126,16 @@
                                             Classes.success="{Binding IsSuccess}" Classes.error="{Binding IsProblem}" />
                                     <TextBlock Grid.Column="1" Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Name}" />
-                                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*">
-                                        <PathIcon Data="{StaticResource IconHistory}" Classes="small accent-text"
+                                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,Auto,*">
+                                        <PathIcon Data="{StaticResource IconRemote}" Classes="small accent-text"
+                                                  Width="11" Height="11" VerticalAlignment="Top" Margin="0,2,5,0"
+                                                  IsVisible="{Binding IsRemote}" ToolTip.Tip="{Binding RemoteTip}"
+                                                  AutomationProperties.Name="Tarefa com servidor remoto" />
+                                        <PathIcon Grid.Column="1" Data="{StaticResource IconHistory}" Classes="small accent-text"
                                                   Width="11" Height="11" VerticalAlignment="Top" Margin="0,2,5,0"
                                                   IsVisible="{Binding IsScheduled}" ToolTip.Tip="{Binding ScheduleTip}"
                                                   AutomationProperties.Name="Tarefa agendada" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" MaxLines="2"
+                                        <TextBlock Grid.Column="2" Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" MaxLines="2"
                                                    TextTrimming="CharacterEllipsis" />
                                     </Grid>
                                     <Button Grid.Column="2" Classes="icon-only delete-task" VerticalAlignment="Top" Margin="0,-2,-4,0"

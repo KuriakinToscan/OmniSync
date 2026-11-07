@@ -61,6 +61,12 @@ public sealed class ScanResult
     /// Quantidade de arquivos indexados no Destino (sem contar <c>lixo/</c> e <c>old/</c>).
     /// </summary>
     public int DestinationFileCount { get; set; }
+
+    /// <summary>
+    /// Temporários (<c>*.omnisync-tmp</c>) deixados no destino por uma execução anterior interrompida, modificados há
+    /// mais de 1 hora. A sincronização os remove antes de copiar (<see cref="OmniSync.Services.ISyncEngine.RemoveStaleTempFiles"/>).
+    /// </summary>
+    public List<string> StaleTempFiles { get; } = new();
 }
 
 /// <summary>
@@ -130,6 +136,27 @@ public sealed class SyncResult
     public TimeSpan Duration { get; set; }
 
     /// <summary>
+    /// Motivo da parada antes do fim (servidor remoto inacessível ou que passou a recusar o acesso); <c>null</c>
+    /// quando a execução foi até o último item.
+    /// </summary>
+    public string? AbortReason { get; set; }
+
+    /// <summary>Indica se a parada exige ação do usuário (senha recusada ao reconectar), e não só o servidor voltar.</summary>
+    public bool AbortRequiresUser { get; set; }
+
+    /// <summary>Itens que ficaram sem executar por causa da parada (<see cref="AbortReason"/>).</summary>
+    public int NotRun { get; set; }
+
+    /// <summary>Indica se a execução parou antes do fim.</summary>
+    public bool WasAborted => AbortReason != null;
+
+    /// <summary>Cópias conferidas por SHA-256 (relendo o arquivo ou calculado pelo servidor).</summary>
+    public int VerifiedByHash { get; set; }
+
+    /// <summary>Cópias conferidas só pelo tamanho (servidor remoto sem comando de SHA-256).</summary>
+    public int VerifiedBySize { get; set; }
+
+    /// <summary>
     /// Resumo textual em uma linha.
     /// </summary>
     public string Summary =>
@@ -139,7 +166,17 @@ public sealed class SyncResult
             PtText.Count(Trashed, "movido", "movidos") + " p/ lixo/",
             PtText.Count(Ignored, "mantido no destino", "mantidos no destino"),
             PtText.Count(Skipped, "pulado", "pulados"),
-            PtText.Count(Failed, "falha", "falhas"));
+            PtText.Count(Failed, "falha", "falhas")) +
+        (NotRun > 0 ? ", " + PtText.Count(NotRun, "não executado", "não executados") : string.Empty);
+
+    /// <summary>
+    /// Resumo para o histórico: o <see cref="Summary"/>, precedido do motivo quando a execução parou e seguido da
+    /// conferência só pelo tamanho, quando houve.
+    /// </summary>
+    public string HistorySummary =>
+        (WasAborted ? (AbortRequiresUser ? "Interrompida (o servidor recusou o acesso): " : "Interrompida (servidor inacessível): ") : string.Empty) +
+        Summary +
+        (VerifiedBySize > 0 ? "; " + PtText.Count(VerifiedBySize, "cópia conferida", "cópias conferidas") + " só pelo tamanho" : string.Empty);
 }
 
 /// <summary>

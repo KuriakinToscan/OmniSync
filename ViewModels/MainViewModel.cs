@@ -44,6 +44,7 @@ public partial class MainViewModel : ViewModelBase
     private int _lastDestinationFileCount;
     private int _lastSourceFileCount;
     private IReadOnlyList<string> _lastScanWarnings = Array.Empty<string>();
+    private IReadOnlyList<string> _lastStaleTemps = Array.Empty<string>();
     private readonly DecisionMemory _decisionMemory = new();
     private string? _planPairKey;
 
@@ -608,7 +609,10 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Linha secundária da tela de resultado.</summary>
     public string ResultSubtitle => LastResult == null
         ? string.Empty
-        : $"{SyncItem.FormatBytes(LastResult.BytesCopied)} gravados em {FormatDuration(LastResult.Duration)} · nenhuma cópia parcial ficou no destino";
+        : LastResult.WasAborted
+            ? $"{LastResult.AbortReason} {PtText.Count(LastResult.NotRun, "item ficou", "itens ficaram")} para a próxima execução; o que já foi copiado está no destino."
+            : $"{SyncItem.FormatBytes(LastResult.BytesCopied)} gravados em {FormatDuration(LastResult.Duration)} · nenhuma cópia parcial ficou no destino" +
+              (LastResult.VerifiedBySize > 0 ? $" · {PtText.Count(LastResult.VerifiedBySize, "cópia conferida", "cópias conferidas")} só pelo tamanho" : string.Empty);
 
     /// <summary>Indica que a última execução teve falhas ou foi interrompida.</summary>
     public bool ResultHasProblems => LastResult != null && (LastResult.HasFailures || LastRunCancelled);
@@ -747,6 +751,7 @@ public partial class MainViewModel : ViewModelBase
         p.EnableDeepHashCheck = EnableDeepHashCheck;
         p.TolerateDstShift = TolerateDstShift;
         p.ExcludePatterns = ExcludePatternsText;
+        SelectedProfile.RefreshRemote();
     }
 
     partial void OnSelectedProfileChanged(ProfileItemViewModel? oldValue, ProfileItemViewModel? newValue)
@@ -1087,6 +1092,7 @@ public partial class MainViewModel : ViewModelBase
         Items.Clear();
         ScanWarnings.Clear();
         _lastScanWarnings = Array.Empty<string>();
+        _lastStaleTemps = Array.Empty<string>();
         _lastDestinationFileCount = 0;
         _lastSourceFileCount = 0;
         SelectedItem = null;
@@ -1300,6 +1306,7 @@ public partial class MainViewModel : ViewModelBase
             _lastDestinationFileCount = scan.DestinationFileCount;
             _lastSourceFileCount = scan.SourceFileCount;
             _lastScanWarnings = scan.Warnings.ToList();
+            _lastStaleTemps = scan.StaleTempFiles.ToList();
             foreach (var warning in scan.Warnings)
             {
                 ScanWarnings.Add(warning);
@@ -1491,6 +1498,15 @@ public partial class MainViewModel : ViewModelBase
         bool cancelled = false;
         try
         {
+            if (_lastStaleTemps.Count > 0)
+            {
+                var staleTemps = _lastStaleTemps;
+                _lastStaleTemps = Array.Empty<string>();
+                var destination = EffectiveDestinationPath;
+                var tempLogger = new InlineProgress<string>(AddLog);
+                await Task.Run(() => _syncEngine.RemoveStaleTempFiles(destination, staleTemps, tempLogger));
+            }
+
             result = await _syncEngine.ExecuteSyncAsync(
                 Items,
                 EffectiveDestinationPath,
@@ -1500,10 +1516,13 @@ public partial class MainViewModel : ViewModelBase
                 new InlineProgress<string>(AddLog),
                 _cts!.Token);
 
-            StatusMessage = result.HasFailures
+            StatusMessage = result.WasAborted
+                ? $"Sincronização interrompida: {result.AbortReason}"
+                : result.HasFailures
                 ? $"Concluída com {PtText.Count(result.Failed, "falha", "falhas")}: {result.Summary}."
                 : $"Sincronização concluída sem falhas: {result.Summary}.";
-            CurrentOperationText = "Operações finalizadas.";
+            CurrentOperationText = result.WasAborted ? "Interrompida." : "Operações finalizadas.";
+            cancelled = result.WasAborted;
         }
         catch (OperationCanceledException)
         {

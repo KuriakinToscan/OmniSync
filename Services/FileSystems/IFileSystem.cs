@@ -15,6 +15,21 @@ namespace OmniSync.Services.FileSystems;
 public readonly record struct FsEntry(string Name, string FullPath, bool IsDirectory, long Length, DateTime LastWriteUtc);
 
 /// <summary>
+/// Como a cópia gravada é conferida com a origem antes de ocupar o lugar no destino.
+/// </summary>
+public enum CopyCheck
+{
+    /// <summary>Relê o arquivo gravado pelo mesmo fluxo e compara o SHA-256 (disco local e SMB).</summary>
+    ReadBack,
+
+    /// <summary>O próprio servidor calcula o SHA-256 do arquivo gravado (<c>sha256sum</c> ou <c>Get-FileHash</c>).</summary>
+    ServerHash,
+
+    /// <summary>Compara só o tamanho gravado (servidor que não executa comandos).</summary>
+    Size
+}
+
+/// <summary>
 /// Camada única de acesso a arquivos usada pelo motor de sincronização, pela restauração de <c>lixo/</c> e pelas
 /// pastas de segurança (<c>lixo/</c> e <c>old/</c>). A implementação local (<see cref="LocalFileSystem"/>) cobre
 /// discos e pastas de rede SMB; destinos remotos (SFTP) implementam o mesmo contrato.
@@ -91,4 +106,16 @@ public interface IFileSystem
 
     /// <summary>Exclui uma pasta vazia (exclusão não recursiva: falha se houver conteúdo).</summary>
     void DeleteEmptyDirectory(string path);
+
+    /// <summary>
+    /// Forma de conferir as cópias gravadas neste sistema de arquivos. O padrão é reler o arquivo.
+    /// </summary>
+    CopyCheck CopyCheck => CopyCheck.ReadBack;
+
+    /// <summary>
+    /// Pede ao servidor o SHA-256 do arquivo, sem trafegar o conteúdo. Só faz sentido com <see cref="CopyCheck.ServerHash"/>.
+    /// </summary>
+    /// <param name="path">Caminho completo do arquivo.</param>
+    /// <returns>O hash, ou <c>null</c> quando o servidor não conseguiu calcular (comando ausente ou caminho diferente no shell).</returns>
+    byte[]? ComputeSha256OnServer(string path) => null;
 }

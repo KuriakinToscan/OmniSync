@@ -33,12 +33,33 @@ public sealed class SftpFactAttribute : FactAttribute
     }
 }
 
+/// <summary>
+/// Teste que precisa de um usuário só-SFTP (<c>ForceCommand internal-sftp</c>), em <c>OMNISYNC_SFTP_ONLY_TEST</c>,
+/// com a mesma senha de <c>OMNISYNC_SFTP_PASSWORD</c>. Obrigatório no CI do Linux.
+/// </summary>
+public sealed class SftpOnlyFactAttribute : FactAttribute
+{
+    /// <summary>Marca o teste como ignorado quando não há usuário só-SFTP configurado.</summary>
+    public SftpOnlyFactAttribute()
+    {
+        if (SftpTestServer.SftpOnly == null && Environment.GetEnvironmentVariable("OMNISYNC_SFTP_REQUIRED") != "1")
+        {
+            Skip = "Sem usuário só-SFTP de teste (OMNISYNC_SFTP_ONLY_TEST).";
+        }
+    }
+}
+
 /// <summary>Servidor SFTP de teste definido pelas variáveis de ambiente.</summary>
 public static class SftpTestServer
 {
     /// <summary>Pasta base no servidor.</summary>
     public static RemoteAddress? Base { get; } =
         RemoteAddress.TryParse(Environment.GetEnvironmentVariable("OMNISYNC_SFTP_TEST"), out var a, out _) &&
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OMNISYNC_SFTP_PASSWORD")) ? a : null;
+
+    /// <summary>Pasta base de um usuário que só tem SFTP (sem comandos), ou <c>null</c>.</summary>
+    public static RemoteAddress? SftpOnly { get; } =
+        RemoteAddress.TryParse(Environment.GetEnvironmentVariable("OMNISYNC_SFTP_ONLY_TEST"), out var a, out _) &&
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OMNISYNC_SFTP_PASSWORD")) ? a : null;
 
     /// <summary>Senha do usuário de teste.</summary>
@@ -315,6 +336,10 @@ public sealed class SftpIntegrationTests : IDisposable
         Assert.Equal(2, result.Copied);
         Assert.Equal(1, result.Replaced);
         Assert.Equal(1, result.Trashed);
+        // O OpenSSH de teste tem sha256sum: as 3 cópias conferidas pelo servidor, nenhuma só pelo tamanho
+        Assert.Equal(CopyCheck.ServerHash, fs.CopyCheck);
+        Assert.Equal(3, result.VerifiedByHash);
+        Assert.Equal(0, result.VerifiedBySize);
 
         Assert.Equal("novo", ReadRemote(fs, dst + "/novo.txt"));
         Assert.Equal("acento", ReadRemote(fs, dst + "/com espaço é.txt"));
@@ -391,6 +416,121 @@ public sealed class SftpIntegrationTests : IDisposable
         Assert.Equal(CliExitCode.Success, await second.RunAsync(command, CancellationToken.None));
         var fs = RemoteConnections.Get(_remote);
         Assert.Equal("a", ReadRemote(fs, _remote + "/Campo/a.txt"));
+    }
+
+    /// <summary>
+    /// O servidor calcula o SHA-256 de nomes com aspas, espaço, acento e caracteres de shell; o favorito com
+    /// releitura troca a conferência para releitura pela rede.
+    /// </summary>
+    [SftpFact]
+    public async Task ServerHash_HandlesTrickyNamesAndFavoriteOption()
+    {
+        var fs = await ConnectTrustingAsync();
+        Assert.Equal("sha256sum", fs.ServerHashCommand);
+        foreach (var name in new[] { "simples.txt", "com espaço é.txt", "it's; echo x $(id) `id` & | > <.txt", "-começa-com-hífen.txt", "barra\\invertida.txt" })
+        {
+            var path = _remote!.WithPath(_remote.Path + "/hash/" + name).ToString();
+            WriteRemote(fs, path, "conteúdo " + name, NewTime);
+            var expected = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("conteúdo " + name));
+            Assert.Equal(expected, fs.ComputeSha256OnServer(path));
+        }
+        // Nenhum arquivo extra foi criado por um nome "executado"
+        Assert.Equal(5, fs.ListDirectory(_remote!.WithPath(_remote.Path + "/hash").ToString()).Count);
+
+        _settings.Favorites.Add(new RemoteFavorite { Name = "teste", Address = _remote.ToString(), VerifyByReading = true });
+        Assert.Equal(CopyCheck.ReadBack, fs.CopyCheck);
+    }
+
+    /// <summary>
+    /// Temporário antigo deixado no servidor por uma queda: a análise anota e a limpeza apaga; o recente fica.
+    /// </summary>
+    [SftpFact]
+    public async Task StaleTemp_OnServer_IsCleaned()
+    {
+        var fs = await ConnectTrustingAsync();
+        var src = Path.Combine(_local, "Campo");
+        WriteLocal(Path.Combine(src, "a.txt"), "a", NewTime);
+        var dst = _remote!.WithPath(_remote.Path + "/Campo").ToString();
+        var stale = dst + "/sub/grande.bin" + PathHelper.TempSuffix;
+        var recent = dst + "/andamento.bin" + PathHelper.TempSuffix;
+        WriteRemote(fs, stale, "metade", DateTime.UtcNow.AddHours(-2));
+        WriteRemote(fs, recent, "andamento", DateTime.UtcNow);
+
+        var engine = new SyncEngine();
+        var scan = await engine.ScanDirectoriesAsync(src, dst, new ScanOptions(), null, CancellationToken.None);
+        Assert.Equal(new[] { stale }, scan.StaleTempFiles);
+        Assert.Equal(1, engine.RemoveStaleTempFiles(dst, scan.StaleTempFiles, null));
+        Assert.False(fs.FileExists(stale));
+        Assert.True(fs.FileExists(recent));
+    }
+
+    /// <summary>
+    /// Conexão derrubada entre uma operação e outra: a seguinte reconecta sozinha e a sincronização segue.
+    /// </summary>
+    [SftpFact]
+    public async Task DroppedConnection_ReconnectsOnNextOperation()
+    {
+        var fs = await ConnectTrustingAsync();
+        var src = Path.Combine(_local, "Campo");
+        WriteLocal(Path.Combine(src, "a.txt"), "a", NewTime);
+        var dst = _remote!.WithPath(_remote.Path + "/Campo").ToString();
+        var engine = new SyncEngine();
+        var scan = await engine.ScanDirectoriesAsync(src, dst, new ScanOptions(), null, CancellationToken.None);
+
+        fs.DropConnectionForTest();
+        Assert.False(fs.IsConnected);
+        var result = await engine.ExecuteSyncAsync(scan.Items, dst, _ => Task.FromResult(ConflictResolution.Ignore), null, null, null, CancellationToken.None);
+
+        Assert.Equal(0, result.Failed);
+        Assert.False(result.WasAborted);
+        Assert.True(fs.IsConnected);
+        Assert.Equal("a", ReadRemote(fs, dst + "/a.txt"));
+    }
+
+    /// <summary>
+    /// Usuário só-SFTP (sem comandos): a detecção não trava nem se engana com a resposta vazia, e as cópias são
+    /// conferidas pelo tamanho.
+    /// </summary>
+    [SftpOnlyFact]
+    public async Task SftpOnlyServer_ChecksBySize()
+    {
+        var baseAddress = SftpTestServer.SftpOnly!;
+        var remote = baseAddress.WithPath(baseAddress.Path + "/omnisync-teste-" + Guid.NewGuid().ToString("N")[..12]);
+        var prompt = new ScriptedPrompt();
+        prompt.Passwords.Enqueue(SftpTestServer.Password);
+        var fs = await RemoteConnections.ConnectAsync(remote, prompt);
+        try
+        {
+            var started = DateTime.UtcNow;
+            Assert.Equal(CopyCheck.Size, fs.CopyCheck);
+            Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(15), "a detecção não pode esperar o tempo-limite");
+            Assert.Null(fs.ServerHashCommand);
+
+            var src = Path.Combine(_local, "Campo");
+            WriteLocal(Path.Combine(src, "a.txt"), "a", NewTime);
+            WriteLocal(Path.Combine(src, "b.txt"), "bb", NewTime);
+            var dst = remote.WithPath(remote.Path + "/Campo").ToString();
+            var engine = new SyncEngine();
+            var scan = await engine.ScanDirectoriesAsync(src, dst, new ScanOptions(), null, CancellationToken.None);
+            var result = await engine.ExecuteSyncAsync(scan.Items, dst, _ => Task.FromResult(ConflictResolution.Ignore), null, null, null, CancellationToken.None);
+
+            Assert.Equal(0, result.Failed);
+            Assert.Equal(2, result.VerifiedBySize);
+            Assert.Equal(0, result.VerifiedByHash);
+            Assert.Equal("bb", ReadRemote(fs, dst + "/b.txt"));
+        }
+        finally
+        {
+            try
+            {
+                using var client = new SftpClient(remote.Host, remote.Port, remote.User, SftpTestServer.Password);
+                client.Connect();
+                DeleteTree(client, remote.Path);
+            }
+            catch (Exception)
+            {
+            }
+        }
     }
 
     /// <summary>Origem remota inexistente: mesma mensagem do local, sem travar.</summary>
