@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using OmniSync.Models;
 using OmniSync.Services;
+using OmniSync.Services.FileSystems;
+using OmniSync.Services.Remote;
 using OmniSync.Services.Scheduling;
 
 namespace OmniSync.Cli;
@@ -127,6 +129,36 @@ public sealed class CliRunner
             new SnoozeService(_scheduler, _snoozeDirectory).OnScheduledRun(profile.Id, DateTime.Now);
         }
 
+        var startedAt = DateTime.UtcNow;
+        try
+        {
+            return await RunProfileAsync(command, profile, cancellationToken);
+        }
+        catch (RemoteAccessException ex)
+        {
+            // Sem janela não há a quem perguntar a senha ou a confirmação do servidor: para sem alterar nada
+            var message = ex.RequiresUser
+                ? $"{ex.Message} Nada foi feito. Abra o OmniSync, selecione a tarefa e clique em Analisar uma vez."
+                : $"{ex.Message} Nada foi feito.";
+            Report($"[ERRO] {message}", alwaysShow: true);
+            RunHistory.Append(profile.Id, new RunRecord
+            {
+                StartedUtc = startedAt,
+                Duration = DateTime.UtcNow - startedAt,
+                Scheduled = command.Scheduled,
+                AnalyzeOnly = command.Action != CliAction.Run,
+                Outcome = "erro",
+                Summary = ex.RequiresUser ? "Conexão remota pendente (senha ou chave do servidor)" : "Servidor remoto inacessível"
+            }, _historyDirectory);
+            Notify(command,
+                ex.RequiresUser ? $"{profile.Name}: o servidor precisa de você" : $"{profile.Name}: servidor inacessível",
+                message, problem: true, snooze: ex.RequiresUser ? null : BuildSnooze(command, profile));
+            return ex.RequiresUser ? CliExitCode.RemotePending : CliExitCode.RemoteUnavailable;
+        }
+    }
+
+    private async Task<CliExitCode> RunProfileAsync(CliCommand command, SyncProfile profile, CancellationToken cancellationToken)
+    {
         bool run = command.Action == CliAction.Run;
         var started = DateTime.UtcNow;
         var stopwatch = Stopwatch.StartNew();
@@ -151,7 +183,7 @@ public sealed class CliRunner
         {
             dest = PathHelper.ResolveEffectiveDestination(source, PathHelper.ExpandUserPath(profile.DestinationPath), profile.UseSourceFolderNameInDestination);
             invalid = PathHelper.DescribePairProblem(source, dest)
-                      ?? (Directory.Exists(source) ? null : $"A origem não existe ou não está acessível: {source}");
+                      ?? (FileSystemProvider.For(source).DirectoryExists(source) ? null : $"A origem não existe ou não está acessível: {source}");
         }
         if (invalid != null)
         {
@@ -225,6 +257,11 @@ public sealed class CliRunner
             return CliExitCode.MassRemovalAborted;
         }
 
+        if (scan.StaleTempFiles.Count > 0)
+        {
+            _engine.RemoveStaleTempFiles(dest, scan.StaleTempFiles, logger);
+        }
+
         SyncResult? result = null;
         bool cancelled = false;
         try
@@ -254,11 +291,12 @@ public sealed class CliRunner
             return CliExitCode.Cancelled;
         }
 
-        var done = NewRecord(result!.HasFailures ? "falhas" : "ok", result.Summary);
+        var done = NewRecord(result!.WasAborted ? "interrompido" : result.HasFailures ? "falhas" : "ok", result.HistorySummary);
         done.Copied = result.Copied;
         done.Replaced = result.Replaced;
         done.Trashed = result.Trashed;
         done.Failed = result.Failed;
+        done.VerifiedBySize = result.VerifiedBySize;
         RunHistory.Append(profile.Id, done, _historyDirectory);
 
         _output.WriteLine();
@@ -272,6 +310,18 @@ public sealed class CliRunner
             _output.WriteLine($"  … e mais {result.Failed - 20:N0} (detalhes no log).");
         }
         _output.WriteLine($"Log: {FileLogService.CurrentLogFile}");
+
+        if (result.WasAborted)
+        {
+            // Servidor caiu no meio: o que foi copiado fica, o resto espera a próxima execução
+            var message = $"{result.AbortReason} {result.Summary}. O que já foi copiado está no destino; a próxima execução continua daí." +
+                          (result.AbortRequiresUser ? " Abra o OmniSync, selecione a tarefa e clique em Analisar." : string.Empty);
+            Report($"[ERRO] Interrompida: {message}", alwaysShow: true);
+            Notify(command,
+                result.AbortRequiresUser ? $"{profile.Name}: o servidor precisa de você" : $"{profile.Name}: servidor inacessível",
+                message, problem: true, snooze: result.AbortRequiresUser ? null : BuildSnooze(command, profile));
+            return result.AbortRequiresUser ? CliExitCode.RemotePending : CliExitCode.RemoteUnavailable;
+        }
 
         if (result.HasFailures)
         {

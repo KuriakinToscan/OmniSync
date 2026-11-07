@@ -31,6 +31,16 @@
         <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
         <Setter Property="FontSize" Value="12.5" />
     </Style>
+    <Style Selector="SelectableTextBlock.mono">
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="TextBlock.danger-text">
+        <Setter Property="Foreground" Value="{DynamicResource OsDangerTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.ok-text">
+        <Setter Property="Foreground" Value="{DynamicResource OsAccentTextBrush}" />
+    </Style>
     <Style Selector="TextBox.mono">
         <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace" />
         <Setter Property="FontSize" Value="12.5" />
@@ -414,5 +424,10 @@
     <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
         <Setter Property="Fill" Value="{DynamicResource OsAccentSoftBrush}" />
         <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!-- Avisos da análise: o FlyoutPresenter do tema limita a largura a 456 px e rola para o lado; aqui o texto quebra -->
+    <Style Selector="FlyoutPresenter.warnings">
+        <Setter Property="MaxWidth" Value="560" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
     </Style>
 </Styles>

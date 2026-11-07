@@ -743,7 +743,7 @@ public class ScheduleTests : IDisposable
         return (settingsPath, profile.Id);
     }
 
-    private sealed class FakeScheduler : ISystemScheduler
+    internal sealed class FakeScheduler : ISystemScheduler
     {
         public HashSet<Guid> Registered { get; } = new();
         public string? Register(SyncProfile profile, SyncSchedule schedule, string executable) { Registered.Add(profile.Id); return null; }

@@ -126,12 +126,16 @@
                                             Classes.success="{Binding IsSuccess}" Classes.error="{Binding IsProblem}" />
                                     <TextBlock Grid.Column="1" Classes="name" Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Name}" />
-                                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*">
-                                        <PathIcon Data="{StaticResource IconHistory}" Classes="small accent-text"
+                                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,Auto,*">
+                                        <PathIcon Data="{StaticResource IconRemote}" Classes="small accent-text"
+                                                  Width="11" Height="11" VerticalAlignment="Top" Margin="0,2,5,0"
+                                                  IsVisible="{Binding IsRemote}" ToolTip.Tip="{Binding RemoteTip}"
+                                                  AutomationProperties.Name="Tarefa com servidor remoto" />
+                                        <PathIcon Grid.Column="1" Data="{StaticResource IconHistory}" Classes="small accent-text"
                                                   Width="11" Height="11" VerticalAlignment="Top" Margin="0,2,5,0"
                                                   IsVisible="{Binding IsScheduled}" ToolTip.Tip="{Binding ScheduleTip}"
                                                   AutomationProperties.Name="Tarefa agendada" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" MaxLines="2"
+                                        <TextBlock Grid.Column="2" Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" MaxLines="2"
                                                    TextTrimming="CharacterEllipsis" />
                                     </Grid>
                                     <Button Grid.Column="2" Classes="icon-only delete-task" VerticalAlignment="Top" Margin="0,-2,-4,0"
@@ -175,11 +179,17 @@
                                                 <TextBlock Text="Escolher pasta…" />
                                             </StackPanel>
                                         </Button>
+                                        <Button Classes="secondary" Click="OnFavoritesClick" Tag="source"
+                                                ToolTip.Tip="Servidores SFTP salvos (NAS, servidor do órgão)">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <TextBlock Text="Remoto…" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button Classes="ghost" Command="{Binding OpenSideFolderCommand}" CommandParameter="source"
                                                 Content="{Binding OpenInFileManagerText}" />
                                     </WrapPanel>
                                     <TextBox Classes="mono" Text="{Binding SourcePath}" VerticalAlignment="Top"
-                                             PlaceholderText="Ex.: E:\Projetos ou /home/usuario/docs"
+                                             PlaceholderText="Ex.: E:\Projetos, /home/usuario/docs ou sftp://usuario@servidor/pasta"
                                              ToolTip.Tip="{Binding SourcePath}"
                                              LostFocus="OnPathBoxLostFocus" x:Name="SourcePathBox"
                                              AutomationProperties.Name="Diretório de origem" />
@@ -188,7 +198,7 @@
                             <PathIcon Grid.Column="1" Data="{StaticResource IconArrowRight}" Width="26" Height="26" Classes="accent-text" />
                             <Border Grid.Column="2" Classes="card" Padding="18,16" MinHeight="150">
                                 <DockPanel>
-                                    <TextBlock DockPanel.Dock="Top" Text="2 · DESTINO (LOCAL OU NAS)" Classes="eyebrow" Margin="0,0,0,10" />
+                                    <TextBlock DockPanel.Dock="Top" Text="2 · DESTINO (LOCAL, REDE OU SFTP)" Classes="eyebrow" Margin="0,0,0,10" />
                                     <WrapPanel DockPanel.Dock="Bottom" ItemSpacing="8" LineSpacing="8" Margin="0,12,0,0">
                                         <Button Classes="secondary" Command="{Binding BrowseDestinationCommand}">
                                             <StackPanel Orientation="Horizontal" Spacing="7">
@@ -196,12 +206,18 @@
                                                 <TextBlock Text="Escolher pasta…" />
                                             </StackPanel>
                                         </Button>
+                                        <Button Classes="secondary" Click="OnFavoritesClick" Tag="destination"
+                                                ToolTip.Tip="Servidores SFTP salvos (NAS, servidor do órgão)">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <TextBlock Text="Remoto…" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button Classes="ghost" Command="{Binding OpenSideFolderCommand}" CommandParameter="destination"
                                                 Content="{Binding OpenInFileManagerText}" />
                                     </WrapPanel>
                                     <StackPanel Spacing="6" VerticalAlignment="Top">
                                         <TextBox Classes="mono" Text="{Binding DestinationPath}"
-                                                 PlaceholderText="Ex.: \\nas\backup ou /mnt/nas/backup"
+                                                 PlaceholderText="Ex.: \\nas\backup, /mnt/nas/backup ou sftp://usuario@servidor/pasta"
                                                  ToolTip.Tip="{Binding DestinationPath}"
                                                  LostFocus="OnPathBoxLostFocus" x:Name="DestinationPathBox"
                                                  AutomationProperties.Name="Diretório de destino" />
@@ -497,8 +513,8 @@
                                         <TextBlock Text="{Binding ScanWarningsLinkText}" FontWeight="SemiBold" />
                                     </StackPanel>
                                     <Button.Flyout>
-                                        <Flyout Placement="BottomEdgeAlignedRight">
-                                            <ScrollViewer MaxWidth="520" MaxHeight="320">
+                                        <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="warnings">
+                                            <ScrollViewer MaxWidth="520" MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
                                                 <ItemsControl ItemsSource="{Binding ScanWarnings}">
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate x:DataType="x:String">
@@ -985,29 +1001,43 @@
                             </StackPanel>
                         </Border>
 
-                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
-                            <Button Classes="tile" Command="{Binding OpenTrashFolderCommand}">
+                        <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12">
+                            <Button Classes="tile" Command="{Binding OpenSideFolderCommand}" CommandParameter="source"
+                                    ToolTip.Tip="{Binding SourcePath}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Abrir origem" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" Text="{Binding SourcePath}" TextTrimming="LeadingCharacterEllipsis" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Classes="tile" Command="{Binding OpenSideFolderCommand}" CommandParameter="destination"
+                                    ToolTip.Tip="{Binding EffectiveDestinationPath}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Abrir destino" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" Text="{Binding EffectiveDestinationPath}" TextTrimming="LeadingCharacterEllipsis" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="2" Classes="tile" Command="{Binding ScanCommand}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Nova análise (F5)" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Confere se origem e destino ficaram iguais." />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Row="1" Classes="tile" Command="{Binding OpenTrashFolderCommand}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Abrir lixo/" FontWeight="SemiBold" />
                                     <TextBlock Classes="caption" TextWrapping="Wrap" Text="Arquivos que existiam só no destino." />
                                 </StackPanel>
                             </Button>
-                            <Button Grid.Column="1" Classes="tile" Command="{Binding OpenOldFolderCommand}">
+                            <Button Grid.Row="1" Grid.Column="1" Classes="tile" Command="{Binding OpenOldFolderCommand}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Abrir old/" FontWeight="SemiBold" />
                                     <TextBlock Classes="caption" TextWrapping="Wrap" Text="Versões substituídas. Data e hora entram no nome só se ele já existir em old/." />
                                 </StackPanel>
                             </Button>
-                            <Button Grid.Column="2" Classes="tile" Command="{Binding ExportReportCommand}">
+                            <Button Grid.Row="1" Grid.Column="2" Classes="tile" Command="{Binding ExportReportCommand}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Exportar relatório CSV" FontWeight="SemiBold" />
                                     <TextBlock Classes="caption" TextWrapping="Wrap" Text="Plano e resultado, arquivo por arquivo." />
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="3" Classes="tile" Command="{Binding ScanCommand}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Nova análise (F5)" FontWeight="SemiBold" />
-                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Confere se origem e destino ficaram iguais." />
                                 </StackPanel>
                             </Button>
                         </Grid>

@@ -11,6 +11,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OmniSync.Models;
 using OmniSync.Services;
+using OmniSync.Services.Remote;
+using OmniSync.Services.FileSystems;
 
 namespace OmniSync.ViewModels;
 
@@ -43,6 +45,7 @@ public partial class MainViewModel : ViewModelBase
     private int _lastDestinationFileCount;
     private int _lastSourceFileCount;
     private IReadOnlyList<string> _lastScanWarnings = Array.Empty<string>();
+    private IReadOnlyList<string> _lastStaleTemps = Array.Empty<string>();
     private readonly DecisionMemory _decisionMemory = new();
     private string? _planPairKey;
 
@@ -607,7 +610,10 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Linha secundária da tela de resultado.</summary>
     public string ResultSubtitle => LastResult == null
         ? string.Empty
-        : $"{SyncItem.FormatBytes(LastResult.BytesCopied)} gravados em {FormatDuration(LastResult.Duration)} · nenhuma cópia parcial ficou no destino";
+        : LastResult.WasAborted
+            ? $"{LastResult.AbortReason} {PtText.Count(LastResult.NotRun, "item ficou", "itens ficaram")} para a próxima execução; o que já foi copiado está no destino."
+            : $"{SyncItem.FormatBytes(LastResult.BytesCopied)} gravados em {FormatDuration(LastResult.Duration)} · nenhuma cópia parcial ficou no destino" +
+              (LastResult.VerifiedBySize > 0 ? $" · {PtText.Count(LastResult.VerifiedBySize, "cópia conferida", "cópias conferidas")} só pelo tamanho" : string.Empty);
 
     /// <summary>Indica que a última execução teve falhas ou foi interrompida.</summary>
     public bool ResultHasProblems => LastResult != null && (LastResult.HasFailures || LastRunCancelled);
@@ -681,6 +687,7 @@ public partial class MainViewModel : ViewModelBase
         _persistSettings = loadSettings;
         _settings = loadSettings ? SettingsService.Load() : new AppSettings();
         InitializeScheduleEditor();
+        InitializeRemote();
         Logs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoSessionLogs));
 
         foreach (var profile in _settings.Profiles)
@@ -745,6 +752,7 @@ public partial class MainViewModel : ViewModelBase
         p.EnableDeepHashCheck = EnableDeepHashCheck;
         p.TolerateDstShift = TolerateDstShift;
         p.ExcludePatterns = ExcludePatternsText;
+        SelectedProfile.RefreshRemote();
     }
 
     partial void OnSelectedProfileChanged(ProfileItemViewModel? oldValue, ProfileItemViewModel? newValue)
@@ -1085,6 +1093,7 @@ public partial class MainViewModel : ViewModelBase
         Items.Clear();
         ScanWarnings.Clear();
         _lastScanWarnings = Array.Empty<string>();
+        _lastStaleTemps = Array.Empty<string>();
         _lastDestinationFileCount = 0;
         _lastSourceFileCount = 0;
         SelectedItem = null;
@@ -1249,6 +1258,10 @@ public partial class MainViewModel : ViewModelBase
         var effectiveDest = EffectiveDestinationPath;
 
         SaveSettings();
+        if (!await EnsureRemoteConnectedAsync(SourcePath.Trim(), effectiveDest))
+        {
+            return;
+        }
         ClearPlan();
         IsShowingResult = false;
         LastResult = null;
@@ -1294,6 +1307,7 @@ public partial class MainViewModel : ViewModelBase
             _lastDestinationFileCount = scan.DestinationFileCount;
             _lastSourceFileCount = scan.SourceFileCount;
             _lastScanWarnings = scan.Warnings.ToList();
+            _lastStaleTemps = scan.StaleTempFiles.ToList();
             foreach (var warning in scan.Warnings)
             {
                 ScanWarnings.Add(warning);
@@ -1365,7 +1379,8 @@ public partial class MainViewModel : ViewModelBase
             AskCount = conflicts.Count(i => i.Resolution == ConflictResolution.AskUser),
             OrphanCount = pending.Count(i => i.IsOrphan),
             DestinationFileCount = _lastDestinationFileCount,
-            Warnings = _lastScanWarnings
+            Warnings = _lastScanWarnings,
+            StaleTempCount = _lastStaleTemps.Count
         };
     }
 
@@ -1392,6 +1407,11 @@ public partial class MainViewModel : ViewModelBase
             StatusMessage = busy;
             AddLog($"[AVISO] {busy}");
             if (NotifyAsync != null) await NotifyAsync("Tarefa em execução", busy);
+            return;
+        }
+
+        if (!await EnsureRemoteConnectedAsync(SourcePath.Trim(), EffectiveDestinationPath))
+        {
             return;
         }
 
@@ -1480,6 +1500,15 @@ public partial class MainViewModel : ViewModelBase
         bool cancelled = false;
         try
         {
+            if (_lastStaleTemps.Count > 0)
+            {
+                var staleTemps = _lastStaleTemps;
+                _lastStaleTemps = Array.Empty<string>();
+                var destination = EffectiveDestinationPath;
+                var tempLogger = new InlineProgress<string>(AddLog);
+                await Task.Run(() => _syncEngine.RemoveStaleTempFiles(destination, staleTemps, tempLogger));
+            }
+
             result = await _syncEngine.ExecuteSyncAsync(
                 Items,
                 EffectiveDestinationPath,
@@ -1489,10 +1518,13 @@ public partial class MainViewModel : ViewModelBase
                 new InlineProgress<string>(AddLog),
                 _cts!.Token);
 
-            StatusMessage = result.HasFailures
+            StatusMessage = result.WasAborted
+                ? $"Sincronização interrompida: {result.AbortReason}"
+                : result.HasFailures
                 ? $"Concluída com {PtText.Count(result.Failed, "falha", "falhas")}: {result.Summary}."
                 : $"Sincronização concluída sem falhas: {result.Summary}.";
-            CurrentOperationText = "Operações finalizadas.";
+            CurrentOperationText = result.WasAborted ? "Interrompida." : "Operações finalizadas.";
+            cancelled = result.WasAborted;
         }
         catch (OperationCanceledException)
         {
@@ -1790,6 +1822,7 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(DestinationPath)) return;
 
         var dest = EffectiveDestinationPath;
+        if (!await EnsureRemoteConnectedAsync(dest)) return;
         IsSyncing = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Lendo a pasta lixo/...";
@@ -1904,8 +1937,79 @@ public partial class MainViewModel : ViewModelBase
     public string OpenInFileManagerText => $"Abrir no {FileManagerName}";
 
     /// <summary>
+    /// Delegate injetado pela View para copiar um texto para a área de transferência.
+    /// </summary>
+    public Func<string, Task>? CopyToClipboardAsync { get; set; }
+
+    /// <summary>
+    /// Pasta de um servidor SFTP: o gerenciador de arquivos não abre <c>sftp://</c>. Mostra o endereço, diz se a pasta
+    /// existe (verificação com limite de tempo) e oferece copiar o endereço para um programa de SFTP.
+    /// </summary>
+    /// <param name="path">Endereço <c>sftp://</c> da pasta.</param>
+    /// <param name="missingNote">Explicação quando a pasta ainda não existe; <c>null</c> usa uma genérica.</param>
+    private async Task ShowRemoteFolderAsync(string path, string? missingNote = null)
+    {
+        string existence;
+        if (!RemoteAddress.TryParse(path, out var address, out var parseError))
+        {
+            StatusMessage = $"Endereço remoto inválido: {parseError}";
+            if (NotifyAsync != null) await NotifyAsync("Pasta no servidor", StatusMessage);
+            return;
+        }
+        if (!await EnsureRemoteConnectedAsync(path))
+        {
+            existence = "Não foi possível conectar ao servidor para verificar a pasta.";
+        }
+        else
+        {
+            var fs = await RemoteConnections.ConnectAsync(address, RemotePrompt);
+            existence = await PathProbe.DirectoryExistsAsync(path, fs.DirectoryExists) switch
+            {
+                ProbeResult.Exists => "A pasta existe no servidor.",
+                ProbeResult.Missing => missingNote ?? "A pasta ainda não existe no servidor.",
+                ProbeResult.TimedOut => PathProbe.TimeoutMessage(address.Root),
+                _ => "Não foi possível verificar a pasta no servidor."
+            };
+        }
+
+        var message = $"{path}\n\n{existence}\n\nO {FileManagerName} não abre pastas de servidores SFTP. " +
+                      "Copie o endereço e cole num programa de SFTP (ex.: WinSCP ou FileZilla).";
+        StatusMessage = $"{path}: {existence}";
+        if (ConfirmAsync == null) return;
+        if (await ConfirmAsync("Pasta no servidor", message, "Copiar endereço") && CopyToClipboardAsync != null)
+        {
+            try
+            {
+                await CopyToClipboardAsync(path);
+                StatusMessage = $"Endereço copiado: {path}";
+            }
+            catch (Exception ex)
+            {
+                AddLog($"[ERRO] Não foi possível copiar o endereço: {ErrorMessages.ForLog(ex)}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifica, sem travar a interface, se uma pasta local ou de rede existe. Se a rede não responder dentro do limite,
+    /// avisa e devolve <c>null</c>.
+    /// </summary>
+    /// <param name="path">Pasta a verificar.</param>
+    /// <returns><c>true</c>/<c>false</c> conforme a pasta exista; <c>null</c> se não respondeu (aviso já mostrado).</returns>
+    private async Task<bool?> LocalFolderExistsAsync(string path)
+    {
+        var result = await PathProbe.DirectoryExistsAsync(path);
+        if (result != ProbeResult.TimedOut) return result == ProbeResult.Exists;
+
+        StatusMessage = PathProbe.TimeoutMessage(path);
+        AddLog($"[AVISO] {StatusMessage}");
+        if (NotifyAsync != null) await NotifyAsync("A pasta não respondeu", StatusMessage);
+        return null;
+    }
+
+    /// <summary>
     /// Abre a pasta de origem ou de destino no gerenciador de arquivos. Para o destino, abre o destino efetivo;
-    /// se ele ainda não existe (primeira sincronização), abre a pasta escolhida e avisa.
+    /// se ele ainda não existe (primeira sincronização), abre a pasta escolhida e avisa. Pastas SFTP mostram o endereço.
     /// </summary>
     /// <param name="side"><c>source</c> para a origem; qualquer outro valor para o destino.</param>
     [RelayCommand]
@@ -1916,21 +2020,35 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(path))
         {
             StatusMessage = isSource ? "Escolha a origem primeiro." : "Escolha o destino primeiro.";
+            if (NotifyAsync != null) await NotifyAsync("Pasta não escolhida", StatusMessage);
             return;
         }
-        if (Directory.Exists(path))
+        if (RemoteAddress.IsRemote(path))
+        {
+            await ShowRemoteFolderAsync(path, isSource ? null : "A pasta ainda não existe no servidor; ela é criada na primeira sincronização.");
+            return;
+        }
+
+        var exists = await LocalFolderExistsAsync(path);
+        if (exists == null) return;
+        if (exists == true)
         {
             OpenInFileManager(path);
             return;
         }
 
         var chosen = DestinationPath.Trim();
-        if (!isSource && Directory.Exists(chosen))
+        if (!isSource && !string.Equals(chosen, path, StringComparison.Ordinal))
         {
-            // Primeira sincronização: a subpasta com o nome da origem ainda não foi criada
-            OpenInFileManager(chosen);
-            StatusMessage = $"A subpasta {path} ainda não existe; ela é criada na primeira sincronização. Foi aberta a pasta escolhida.";
-            return;
+            var chosenExists = await LocalFolderExistsAsync(chosen);
+            if (chosenExists == null) return;
+            if (chosenExists == true)
+            {
+                // Primeira sincronização: a subpasta com o nome da origem ainda não foi criada
+                OpenInFileManager(chosen);
+                StatusMessage = $"A subpasta {path} ainda não existe; ela é criada na primeira sincronização. Foi aberta a pasta escolhida.";
+                return;
+            }
         }
 
         StatusMessage = $"A pasta {path} não existe ou não está acessível.";
@@ -1945,15 +2063,29 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     /// <param name="side"><c>source</c> para a origem; qualquer outro valor para o destino.</param>
     [RelayCommand]
-    private void OpenItemLocation(string? side)
+    private async Task OpenItemLocationAsync(string? side)
     {
         var item = SelectedItem;
         if (item == null) return;
         var path = side == "source" ? item.SourceFullPath : item.DestinationFullPath;
         if (string.IsNullOrWhiteSpace(path)) return;
 
+        if (RemoteAddress.IsRemote(path))
+        {
+            var slash = path.LastIndexOf('/');
+            var remoteFolder = slash > path.IndexOf("://", StringComparison.Ordinal) + 3 ? path[..slash] : path;
+            await ShowRemoteFolderAsync(remoteFolder, "A pasta deste arquivo ainda não existe no servidor.");
+            return;
+        }
         var folder = Path.GetDirectoryName(path);
-        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+        if (string.IsNullOrEmpty(folder))
+        {
+            StatusMessage = "A pasta deste arquivo não existe (ainda).";
+            return;
+        }
+        var exists = await LocalFolderExistsAsync(folder);
+        if (exists == null) return;
+        if (exists == false)
         {
             StatusMessage = "A pasta deste arquivo não existe (ainda).";
             return;
@@ -1970,21 +2102,32 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(DestinationPath))
         {
             StatusMessage = "Por favor, selecione primeiro o diretório de destino.";
+            if (NotifyAsync != null) await NotifyAsync("Destino não escolhido", StatusMessage);
+            return;
+        }
+
+        var purpose = subFolder == PathHelper.TrashFolderName
+            ? "Ela é criada na primeira sincronização que mover para lá arquivos que existem só no destino."
+            : "Ela é criada na primeira sincronização que substituir um arquivo, para guardar a versão anterior.";
+
+        if (RemoteAddress.IsRemote(EffectiveDestinationPath))
+        {
+            var remote = EffectiveDestinationPath.TrimEnd('/') + "/" + subFolder;
+            await ShowRemoteFolderAsync(remote, $"A pasta {subFolder}/ ainda não existe no servidor. {purpose}");
             return;
         }
 
         try
         {
             var fullPath = Path.GetFullPath(Path.Combine(EffectiveDestinationPath, subFolder));
-            if (Directory.Exists(fullPath))
+            var exists = await LocalFolderExistsAsync(fullPath);
+            if (exists == null) return;
+            if (exists == true)
             {
                 OpenInFileManager(fullPath);
                 return;
             }
 
-            var purpose = subFolder == PathHelper.TrashFolderName
-                ? "Ela é criada na primeira sincronização que mover para lá arquivos que existem só no destino."
-                : "Ela é criada na primeira sincronização que substituir um arquivo, para guardar a versão anterior.";
             var message = $"A pasta {subFolder}/ ainda não existe em {EffectiveDestinationPath}. {purpose}";
             StatusMessage = message;
             if (NotifyAsync != null)

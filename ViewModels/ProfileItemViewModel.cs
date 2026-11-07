@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OmniSync.Models;
+using OmniSync.Services.FileSystems;
 
 namespace OmniSync.ViewModels;
 
@@ -65,6 +67,14 @@ public partial class ProfileItemViewModel : ObservableObject
     [ObservableProperty]
     private string _scheduleTip = string.Empty;
 
+    /// <summary>Se a origem ou o destino é remoto (<c>sftp://</c>): ícone de servidor na barra lateral.</summary>
+    [ObservableProperty]
+    private bool _isRemote;
+
+    /// <summary>Endereços remotos da tarefa, para a dica do ícone.</summary>
+    [ObservableProperty]
+    private string _remoteTip = string.Empty;
+
     /// <summary>
     /// Cria o item a partir da tarefa salva.
     /// </summary>
@@ -74,6 +84,19 @@ public partial class ProfileItemViewModel : ObservableObject
         _name = profile.Name;
         RefreshFromLastRun();
         RefreshSchedule();
+        RefreshRemote();
+    }
+
+    /// <summary>
+    /// Atualiza o ícone de remoto a partir dos caminhos da tarefa.
+    /// </summary>
+    public void RefreshRemote()
+    {
+        var lines = new List<string>();
+        if (RemoteAddress.TryParse(Profile.SourcePath, out var source, out _)) lines.Add("Origem remota: " + source);
+        if (RemoteAddress.TryParse(Profile.DestinationPath, out var dest, out _)) lines.Add("Destino remoto: " + dest);
+        IsRemote = lines.Count > 0;
+        RemoteTip = string.Join(Environment.NewLine, lines);
     }
 
     /// <summary>

@@ -24,6 +24,14 @@ public sealed class AppSettings
     /// </summary>
     public bool InstallOfferDismissed { get; set; }
 
+    /// <summary>Endereços remotos com nome (favoritos).</summary>
+    public List<RemoteFavorite> Favorites { get; set; } = new();
+
+    /// <summary>
+    /// Chaves de servidor confirmadas pelo usuário: <c>servidor:porta</c> → impressão digital SHA-256 (base64).
+    /// </summary>
+    public Dictionary<string, string> KnownHostKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Último diretório de Origem (formato 1.1, migrado para <see cref="Profiles"/>).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourcePath { get; set; }
@@ -102,6 +110,9 @@ public static class SettingsService
     public static AppSettings Normalize(AppSettings settings)
     {
         settings.Profiles ??= new List<SyncProfile>();
+        settings.Favorites ??= new List<RemoteFavorite>();
+        settings.Favorites.RemoveAll(f => f == null || string.IsNullOrWhiteSpace(f.Address));
+        settings.KnownHostKeys = new Dictionary<string, string>(settings.KnownHostKeys ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
         settings.Profiles.RemoveAll(p => p == null);
 
         bool hasLegacyPair = !string.IsNullOrWhiteSpace(settings.SourcePath) || !string.IsNullOrWhiteSpace(settings.DestinationPath);

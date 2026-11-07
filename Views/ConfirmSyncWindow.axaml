@@ -13,7 +13,7 @@
     <DockPanel>
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource OsPanelBrush}" BorderBrush="{DynamicResource OsCardBorderBrush}" BorderThickness="0,1,0,0" Padding="24,14">
             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                <TextBlock Text="Nenhum arquivo é excluído." Classes="subtle" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Summary.DeletionNote}" Classes="subtle" VerticalAlignment="Center" TextWrapping="Wrap" />
                 <Button Grid.Column="1" Classes="secondary" Content="Voltar ao plano" Command="{Binding CancelCommand}" IsCancel="True" MinHeight="40" />
                 <Button Grid.Column="2" Classes="accent primary" Content="Sincronizar agora" Command="{Binding ConfirmCommand}" />
             </Grid>

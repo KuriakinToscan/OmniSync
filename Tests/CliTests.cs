@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using OmniSync.Cli;
 using OmniSync.Models;
 using OmniSync.Services;
+using OmniSync.Services.FileSystems;
+using OmniSync.Services.Remote;
 using Xunit;
 
 namespace OmniSync.Tests;
@@ -234,6 +236,82 @@ public class CliTests : IDisposable
         Assert.Contains("1 tarefa salva:", output.ToString());
         Assert.Contains(Path.Combine(dst, "Volume"), output.ToString());
         Assert.Contains("nunca sincronizada", output.ToString());
+    }
+
+    /// <summary>
+    /// Servidor que cai no meio: a linha de comando sai com código 8, registra "interrompido" no histórico com o
+    /// motivo e deixa o aviso de servidor inacessível.
+    /// </summary>
+    [Fact]
+    public async Task Run_ServerOutage_StopsWithCode8()
+    {
+        var (settingsPath, src, _) = CreateTask(orphans: 0);
+        File.WriteAllText(Path.Combine(src, "outro.txt"), "outro");
+        File.WriteAllText(Path.Combine(src, "zzz.txt"), "ultimo");
+        var output = new StringWriter();
+        var runner = new CliRunner(new SyncEngine(destinationFileSystem: new OutageFileSystem()), output, settingsPath);
+
+        var code = await runner.RunAsync(new CliCommand(CliAction.Run, "Volume", Scheduled: true), CancellationToken.None);
+
+        Assert.Equal(CliExitCode.RemoteUnavailable, code);
+        Assert.Contains("Interrompida:", output.ToString());
+        var record = RunHistory.Load(SettingsService.Load(settingsPath).Profiles.Single().Id, Path.Combine(_root, "history")).First();
+        Assert.Equal("interrompido", record.Outcome);
+        Assert.StartsWith("Interrompida (servidor inacessível)", record.Summary);
+        Assert.Contains("1 não executado", record.Summary);
+        Assert.NotNull(runner.Notification);
+        Assert.Contains("servidor inacessível", runner.Notification!.Title);
+    }
+
+    /// <summary>
+    /// Temporário antigo deixado no destino por execução interrompida é removido pela sincronização da linha de comando.
+    /// </summary>
+    [Fact]
+    public async Task Run_RemovesStaleTempFiles()
+    {
+        var (settingsPath, _, dst) = CreateTask(orphans: 0);
+        var stale = Path.Combine(dst, "Volume", "sub", "grande.bin" + PathHelper.TempSuffix);
+        Directory.CreateDirectory(Path.GetDirectoryName(stale)!);
+        File.WriteAllText(stale, "metade");
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-5));
+        var output = new StringWriter();
+        var runner = new CliRunner(new SyncEngine(), output, settingsPath);
+
+        Assert.Equal(CliExitCode.Success, await runner.RunAsync(new CliCommand(CliAction.Run, "Volume", Verbose: true), CancellationToken.None));
+        Assert.False(File.Exists(stale));
+    }
+
+    /// <summary>Destino local cuja segunda gravação encontra o "servidor" inacessível.</summary>
+    private sealed class OutageFileSystem : IFileSystem
+    {
+        private readonly IFileSystem _inner = LocalFileSystem.Instance;
+        private int _creates;
+
+        public string Kind => "teste";
+        public Stream CreateNew(string path, long expectedLength, bool readBack)
+        {
+            if (++_creates > 1)
+            {
+                throw new RemoteAccessException(RemoteAccessProblem.Unreachable, RemoteAddress.Parse("sftp://teste@servidor/"),
+                    "O servidor servidor:22 ficou inacessível: tempo esgotado.");
+            }
+            return _inner.CreateNew(path, expectedLength, readBack);
+        }
+        public string Combine(string directory, string relativePath) => _inner.Combine(directory, relativePath);
+        public string? GetDirectoryName(string path) => _inner.GetDirectoryName(path);
+        public string GetRelativePath(string root, string path) => _inner.GetRelativePath(root, path);
+        public bool DirectoryExists(string path) => _inner.DirectoryExists(path);
+        public bool FileExists(string path) => _inner.FileExists(path);
+        public void CreateDirectory(string path) => _inner.CreateDirectory(path);
+        public System.Collections.Generic.IReadOnlyList<FsEntry> ListDirectory(string path) => _inner.ListDirectory(path);
+        public System.Collections.Generic.IEnumerable<FsEntry> EnumerateFilesRecursive(string path) => _inner.EnumerateFilesRecursive(path);
+        public FsEntry? GetFile(string path) => _inner.GetFile(path);
+        public Stream OpenRead(string path) => _inner.OpenRead(path);
+        public void SetLastWriteTimeUtc(string path, DateTime lastWriteUtc) => _inner.SetLastWriteTimeUtc(path, lastWriteUtc);
+        public void MoveFile(string sourcePath, string targetPath) => _inner.MoveFile(sourcePath, targetPath);
+        public void DeleteFile(string path) => _inner.DeleteFile(path);
+        public bool IsDirectoryEmpty(string path) => _inner.IsDirectoryEmpty(path);
+        public void DeleteEmptyDirectory(string path) => _inner.DeleteEmptyDirectory(path);
     }
 
     /// <summary>

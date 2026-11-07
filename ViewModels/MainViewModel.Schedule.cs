@@ -571,12 +571,13 @@ public partial class MainViewModel
             StartedUtc = DateTime.UtcNow - result.Duration,
             Duration = result.Duration,
             Scheduled = false,
-            Outcome = cancelled ? "interrompido" : result.HasFailures ? "falhas" : "ok",
+            Outcome = result.WasAborted ? "interrompido" : cancelled ? "interrompido" : result.HasFailures ? "falhas" : "ok",
             Copied = result.Copied,
             Replaced = result.Replaced,
             Trashed = result.Trashed,
             Failed = result.Failed,
-            Summary = cancelled ? "Interrompida; nenhum arquivo parcial no destino" : result.Summary
+            VerifiedBySize = result.VerifiedBySize,
+            Summary = result.WasAborted ? result.HistorySummary : cancelled ? "Interrompida; nenhum arquivo parcial no destino" : result.HistorySummary
         };
         RunHistory.Append(profile.Id, record);
     }

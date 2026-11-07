@@ -83,6 +83,16 @@ public sealed record LogEntry(DateTime Timestamp, LogLevel Level, string Message
 /// </summary>
 public sealed class SyncPlanSummary
 {
+    /// <summary>Temporários de execução interrompida que serão apagados do destino.</summary>
+    public int StaleTempCount { get; init; }
+
+    /// <summary>Texto do rodapé da revisão: o que é excluído (só temporários de execução interrompida, se houver).</summary>
+    public string DeletionNote => StaleTempCount == 0
+        ? "Nenhum arquivo é excluído."
+        : StaleTempCount == 1
+            ? "Só o temporário da execução interrompida é excluído."
+            : $"Só os {StaleTempCount} temporários da execução interrompida são excluídos.";
+
     /// <summary>Destino efetivo.</summary>
     public required string DestinationPath { get; init; }
 

@@ -73,7 +73,7 @@ Se você alterar pastas ou opções depois da análise (botão **Alterar**), o p
 1. Clique em **Revisar e sincronizar** (ou Ctrl+Enter).
 2. Revise a janela **Revise antes de sincronizar**: quantos arquivos serão copiados, substituídos, mantidos e movidos para `lixo/`, e quantos conflitos ainda serão perguntados.
 3. Se a operação for mover uma parte grande do destino para `lixo/` (20% ou mais dos arquivos, com mínimo de 10, ou 1.000 arquivos ou mais), a janela exibe um alerta vermelho e só libera o botão depois que você marcar a confirmação. Isso costuma indicar destino escolhido errado.
-4. Acompanhe a tela de execução. Ao final, a tela de resultado mostra o balanço. Itens com falha podem ser reprocessados em **Tentar de novo**.
+4. Acompanhe a tela de execução. Ao final, a tela de resultado mostra o balanço. Itens com falha podem ser reprocessados em **Tentar de novo**. Na mesma tela, **Abrir origem** e **Abrir destino** mostram as pastas da tarefa.
 5. **Exportar relatório CSV** gera o relatório da análise e do resultado (UTF-8, separado por ponto e vírgula, abre direto no Excel). O cabeçalho usa nomes ASCII (`caminho_relativo`, `acao`, `acao_codigo`, `decisao`, `decisao_codigo`…); as colunas `*_na_analise` mostram o destino como estava antes da sincronização. Os códigos são em português, sem acento: `acao_codigo` = `novo`, `conflito`, `orfao`, `identico`; `decisao_codigo` = `substituir`, `manter`, `perguntar`. Na barra de busca, o **X** (ou Esc) limpa o texto.
 
 ---
@@ -87,6 +87,30 @@ Se você alterar pastas ou opções depois da análise (botão **Alterar**), o p
   ```
   Ao usar **Procurar...** em "Rede", entre no servidor e escolha uma **pasta compartilhada específica**, não o ícone raiz "Rede".
 - **Linux**: use o ponto de montagem do compartilhamento CIFS/SMB ou NFS (ex.: `/mnt/nas/backup` ou `/run/user/1000/gvfs/smb-share:...`).
+
+### Servidor SFTP (NAS, servidor Linux, OpenSSH do Windows)
+
+A origem e o destino aceitam um endereço SFTP:
+
+```text
+sftp://usuario@servidor/pasta
+sftp://usuario@servidor:2222/volume1/backup
+```
+
+- A porta padrão é 22. O caminho é o caminho completo da pasta no servidor (no OpenSSH do Windows, algo como `/C:/Users/usuario/Backup`).
+- **Remoto…**, ao lado de **Escolher pasta…**, lista os **favoritos** (servidores salvos com nome) e abre o cadastro. No cadastro:
+  - informe servidor, porta, usuário, pasta e a forma de entrar (senha ou arquivo de chave, como `id_ed25519`);
+  - use **Testar conexão**: ela conecta, lista a pasta e grava, renomeia e apaga um arquivo de teste. O resultado também diz como as cópias serão conferidas (veja **Conferência** abaixo).
+- **Senha:** fica no cofre do sistema, nunca no `settings.json`. No Windows é o Gerenciador de Credenciais; no Linux, o chaveiro do GNOME/KDE. Sem cofre, a senha vale só enquanto o OmniSync estiver aberto.
+- **Primeira conexão:** o OmniSync mostra a impressão digital da chave do servidor (`SHA256:…`) e pede confirmação. Se a chave mudar depois, a conexão é recusada; isso protege contra um servidor falso. Se o servidor foi reinstalado, use **Esquecer chave do servidor** no favorito.
+- **Garantias:** são as mesmas do disco local. Órfãos vão para `lixo/` e versões substituídas para `old/`, por renomeação no servidor. Cada arquivo é gravado como temporário e renomeado.
+- **Conferência:** cada cópia é conferida antes de ocupar o lugar no destino.
+  - Normalmente, o próprio servidor calcula o SHA-256 do arquivo gravado (`sha256sum` no Linux e na maioria dos NAS; `Get-FileHash` no OpenSSH do Windows), e o OmniSync compara com o da origem. O arquivo não volta pela rede.
+  - Servidor que só aceita SFTP, sem comandos (comum com pastas isoladas por `chroot`), fica com a conferência pelo **tamanho**. O registro e o histórico dizem quantas cópias foram conferidas assim.
+  - No favorito, **Conferir cada cópia relendo o arquivo pela rede** troca para releitura com SHA-256, ao custo de dobrar o tráfego.
+- **Queda do servidor:** uma queda curta reconecta sozinha e repete o arquivo. Se o servidor não voltar, a sincronização para: o arquivo em andamento falha, os demais ficam como **não executados** e o resultado aparece como interrompido. O que já foi copiado fica no destino, e a próxima execução continua daí.
+- **Desempenho (estimativa):** cada arquivo custa idas e voltas ao servidor. Pastas com dezenas de milhares de arquivos pequenos ficam bem mais lentas que no disco local.
+- **Agendamento:** a execução agendada usa a senha do cofre e a chave já confirmada, sem perguntar nada. Se faltar uma delas, ela para com o código 7 e avisa. Abra o OmniSync e analise a tarefa uma vez para resolver.
 
 ---
 
@@ -124,13 +148,14 @@ Conflitos ainda em **Perguntar na hora** abrem uma janela comparativa com tamanh
   - Arquivos que receberam sufixo de data em `lixo/` (ex.: `foto_20261028_114500.jpg`) voltam com o nome original quando ele está livre.
   - Só pastas que ficaram vazias são removidas de `lixo/`.
   - Depois da restauração, faça uma nova análise.
-- **Abrir lixo/** e **Abrir old/**: abrem as pastas no gerenciador de arquivos. Em `old/`, a versão substituída mantém o nome; data e hora só entram no nome quando já existe um arquivo igual em `old/` (ex.: `relatorio_20261028_114500.xlsx`).
+- **Abrir lixo/** e **Abrir old/**: abrem as pastas no gerenciador de arquivos. Com destino SFTP, que o gerenciador de arquivos não abre, mostram o endereço da pasta no servidor, dizem se ela existe e oferecem **Copiar endereço** para colar num programa de SFTP (ex.: WinSCP ou FileZilla). O mesmo vale para **Abrir no Explorer**, **Abrir origem** e **Abrir destino**. Em `old/`, a versão substituída mantém o nome; data e hora só entram no nome quando já existe um arquivo igual em `old/` (ex.: `relatorio_20261028_114500.xlsx`).
+- **Pasta de rede que não responde**: os botões que abrem pastas esperam no máximo 5 s. Se a unidade de rede (ex.: `Z:` de um NAS desligado) não responder, o aplicativo avisa e continua respondendo, em vez de travar até o Windows desistir (cerca de 1 min). O próprio Windows (Explorer, PowerShell) pode continuar lento enquanto a unidade estiver caída; reconecte-a ou remova-a com `net use Z: /delete`.
 
 ---
 
 ## 7. Garantias de Segurança
 
-- **Nenhuma cópia parcial no destino**: cada arquivo é gravado primeiro como `nome.omnisync-tmp` e só então renomeado. Cancelamento, queda de rede ou falha removem o temporário.
+- **Nenhuma cópia parcial no destino**: cada arquivo é gravado primeiro como `nome.omnisync-tmp` e só então renomeado. Cancelamento, queda de rede ou falha removem o temporário. Se o programa fechar ou a conexão cair antes disso, o temporário que sobrar é apontado na análise seguinte e apagado na sincronização, desde que tenha mais de 1 hora (um temporário recente pode ser a cópia em andamento de outra tarefa com o mesmo destino).
 - **Substituição segura**: a nova versão é copiada antes de a atual ir para `old/`. Se a etapa final falhar, a versão anterior é devolvida ao lugar.
 - **Nunca sobrescreve**: se um arquivo surgir no destino depois da análise, o item falha com aviso em vez de sobrescrever.
 - **Origem e destino aninhados são bloqueados**: destino dentro da origem (ou o contrário) é recusado na análise.
@@ -190,6 +215,8 @@ O nome da tarefa não diferencia maiúsculas nem acentos (`"volume"` encontra `V
 | 4 | Interrompido (Ctrl+C) |
 | 5 | Erro inesperado (detalhes no log) |
 | 6 | A tarefa já está sendo sincronizada (pela interface ou por outro agendamento); nada foi feito |
+| 7 | Conexão remota precisa de você: falta a senha no cofre, a senha guardada foi recusada, ou a chave do servidor é nova ou mudou. Abra o OmniSync e analise a tarefa uma vez. Antes da cópia, nada foi feito; se a recusa veio ao reconectar no meio, o que já foi copiado fica |
+| 8 | Servidor remoto inacessível (endereço, porta, rede) ou arquivo de chave ilegível. Se ele cair no meio da sincronização, o que já foi copiado fica e o resto espera a próxima execução |
 
 **No PowerShell (Windows)**, acrescente `| Out-Host` para o terminal esperar o fim e mostrar a saída; o código fica em `$LASTEXITCODE`:
 

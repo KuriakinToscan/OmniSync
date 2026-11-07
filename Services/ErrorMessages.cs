@@ -10,6 +10,21 @@ namespace OmniSync.Services;
 /// </summary>
 public static class ErrorMessages
 {
+    /// <summary>
+    /// Ajusta uma mensagem do sistema para vir depois de dois-pontos no meio de uma frase: põe a primeira letra em
+    /// minúscula ("…inacessível: nenhuma conexão…"), sem mexer em siglas ("SSH", "IOException").
+    /// </summary>
+    /// <param name="message">Mensagem original (ex.: <see cref="Exception.Message"/>).</param>
+    public static string AfterColon(string? message)
+    {
+        if (string.IsNullOrEmpty(message)) return string.Empty;
+        if (message.Length > 1 && char.IsUpper(message[0]) && char.IsLower(message[1]))
+        {
+            return char.ToLowerInvariant(message[0]) + message[1..];
+        }
+        return message;
+    }
+
     // Códigos Win32 (parte baixa do HRESULT 0x8007xxxx)
     private const int WinFileNotFound = 2;
     private const int WinPathNotFound = 3;
