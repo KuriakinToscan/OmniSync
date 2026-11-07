@@ -100,7 +100,7 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
             catch (Exception ex) when (ex is SshException or SocketException or IOException or TimeoutException or ProxyException or ObjectDisposedException)
             {
                 throw new RemoteAccessException(RemoteAccessProblem.Unreachable, _endpoint,
-                    $"O servidor {_endpoint.HostPortKey} ficou inacessível: {ex.Message}", inner: ex);
+                    $"O servidor {_endpoint.HostPortKey} ficou inacessível: {ErrorMessages.AfterColon(ex.Message)}", inner: ex);
             }
         }
     }
@@ -585,8 +585,8 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
             SftpPermissionDeniedException => new UnauthorizedAccessException($"Permissão negada no servidor: {displayPath}", ex),
             SshAuthenticationException => new UnauthorizedAccessException($"O servidor recusou o usuário ou a senha ({displayPath}).", ex),
             SshConnectionException or SshOperationTimeoutException or SocketException or ObjectDisposedException
-                => new IOException($"A conexão com o servidor caiu ou não respondeu ({displayPath}): {ex.Message}", ex),
-            SshException => new IOException($"O servidor recusou a operação em {displayPath}: {ex.Message}", ex),
+                => new IOException($"A conexão com o servidor caiu ou não respondeu ({displayPath}): {ErrorMessages.AfterColon(ex.Message)}", ex),
+            SshException => new IOException($"O servidor recusou a operação em {displayPath}: {ErrorMessages.AfterColon(ex.Message)}", ex),
             _ => null
         };
     }

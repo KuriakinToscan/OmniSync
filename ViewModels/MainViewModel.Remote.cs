@@ -130,7 +130,7 @@ public partial class MainViewModel
                 {
                     PathHelper.TryDeleteFile(fs, probe);
                     PathHelper.TryDeleteFile(fs, renamed);
-                    return (false, $"Conectou e listou a pasta ({PtText.Count(count, "item", "itens")}), mas não conseguiu gravar e renomear: {ex.Message}");
+                    return (false, $"Conectou e listou a pasta ({PtText.Count(count, "item", "itens")}), mas não conseguiu gravar e renomear: {ErrorMessages.AfterColon(ex.Message)}");
                 }
                 return (true, $"Conexão OK: a pasta {address.Path} tem {PtText.Count(count, "item", "itens")}, e gravar, renomear e apagar funcionaram. {check}");
             });

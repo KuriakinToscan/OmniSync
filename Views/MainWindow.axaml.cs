@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -54,6 +55,10 @@ public partial class MainWindow : Window
             vm.SelectTrashEntriesAsync = SelectTrashEntriesAsync;
             vm.ConfirmAsync = (title, message, confirmText) => MessageDialog.ShowAsync(this, title, message, confirmText);
             vm.NotifyAsync = (title, message) => MessageDialog.InformAsync(this, title, message);
+            vm.CopyToClipboardAsync = async text =>
+            {
+                if (Clipboard != null) await Clipboard.SetTextAsync(text);
+            };
             vm.RemotePrompt = new WindowRemotePrompt(this);
             vm.EnsureInstalledAsync = async (state, reason) =>
                 await InstallWindow.ShowAsync(this, state, reason, allowDismiss: false) == InstallChoice.Installed;
@@ -342,17 +347,18 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    var candidatePath = initialPath;
-                    if (!Directory.Exists(candidatePath))
+                    // Verificação fora da interface e com limite: numa unidade de rede caída, Directory.Exists
+                    // prende a janela até o timeout do Windows. Sem resposta, o seletor abre na pasta padrão.
+                    string? candidatePath = initialPath;
+                    var probe = await PathProbe.DirectoryExistsAsync(candidatePath);
+                    if (probe == ProbeResult.Missing)
                     {
                         var parent = Path.GetDirectoryName(candidatePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                        if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
-                        {
-                            candidatePath = parent;
-                        }
+                        candidatePath = parent;
+                        probe = string.IsNullOrWhiteSpace(parent) ? ProbeResult.Missing : await PathProbe.DirectoryExistsAsync(parent);
                     }
 
-                    if (Directory.Exists(candidatePath))
+                    if (probe == ProbeResult.Exists && candidatePath != null)
                     {
                         var folder = await topLevel.StorageProvider.TryGetFolderFromPathAsync(candidatePath);
                         if (folder != null)

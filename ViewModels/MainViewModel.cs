@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OmniSync.Models;
 using OmniSync.Services;
+using OmniSync.Services.Remote;
 using OmniSync.Services.FileSystems;
 
 namespace OmniSync.ViewModels;
@@ -1935,12 +1936,80 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Rótulo dos botões que abrem origem e destino no gerenciador de arquivos.</summary>
     public string OpenInFileManagerText => $"Abrir no {FileManagerName}";
 
-    private static string RemoteFolderMessage(string path) =>
-        $"{path} fica num servidor remoto e não abre no gerenciador de arquivos. Use o seu programa de SFTP (ex.: WinSCP ou FileZilla) para ver a pasta.";
+    /// <summary>
+    /// Delegate injetado pela View para copiar um texto para a área de transferência.
+    /// </summary>
+    public Func<string, Task>? CopyToClipboardAsync { get; set; }
+
+    /// <summary>
+    /// Pasta de um servidor SFTP: o gerenciador de arquivos não abre <c>sftp://</c>. Mostra o endereço, diz se a pasta
+    /// existe (verificação com limite de tempo) e oferece copiar o endereço para um programa de SFTP.
+    /// </summary>
+    /// <param name="path">Endereço <c>sftp://</c> da pasta.</param>
+    /// <param name="missingNote">Explicação quando a pasta ainda não existe; <c>null</c> usa uma genérica.</param>
+    private async Task ShowRemoteFolderAsync(string path, string? missingNote = null)
+    {
+        string existence;
+        if (!RemoteAddress.TryParse(path, out var address, out var parseError))
+        {
+            StatusMessage = $"Endereço remoto inválido: {parseError}";
+            if (NotifyAsync != null) await NotifyAsync("Pasta no servidor", StatusMessage);
+            return;
+        }
+        if (!await EnsureRemoteConnectedAsync(path))
+        {
+            existence = "Não foi possível conectar ao servidor para verificar a pasta.";
+        }
+        else
+        {
+            var fs = await RemoteConnections.ConnectAsync(address, RemotePrompt);
+            existence = await PathProbe.DirectoryExistsAsync(path, fs.DirectoryExists) switch
+            {
+                ProbeResult.Exists => "A pasta existe no servidor.",
+                ProbeResult.Missing => missingNote ?? "A pasta ainda não existe no servidor.",
+                ProbeResult.TimedOut => PathProbe.TimeoutMessage(address.Root),
+                _ => "Não foi possível verificar a pasta no servidor."
+            };
+        }
+
+        var message = $"{path}\n\n{existence}\n\nO {FileManagerName} não abre pastas de servidores SFTP. " +
+                      "Copie o endereço e cole num programa de SFTP (ex.: WinSCP ou FileZilla).";
+        StatusMessage = $"{path}: {existence}";
+        if (ConfirmAsync == null) return;
+        if (await ConfirmAsync("Pasta no servidor", message, "Copiar endereço") && CopyToClipboardAsync != null)
+        {
+            try
+            {
+                await CopyToClipboardAsync(path);
+                StatusMessage = $"Endereço copiado: {path}";
+            }
+            catch (Exception ex)
+            {
+                AddLog($"[ERRO] Não foi possível copiar o endereço: {ErrorMessages.ForLog(ex)}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifica, sem travar a interface, se uma pasta local ou de rede existe. Se a rede não responder dentro do limite,
+    /// avisa e devolve <c>null</c>.
+    /// </summary>
+    /// <param name="path">Pasta a verificar.</param>
+    /// <returns><c>true</c>/<c>false</c> conforme a pasta exista; <c>null</c> se não respondeu (aviso já mostrado).</returns>
+    private async Task<bool?> LocalFolderExistsAsync(string path)
+    {
+        var result = await PathProbe.DirectoryExistsAsync(path);
+        if (result != ProbeResult.TimedOut) return result == ProbeResult.Exists;
+
+        StatusMessage = PathProbe.TimeoutMessage(path);
+        AddLog($"[AVISO] {StatusMessage}");
+        if (NotifyAsync != null) await NotifyAsync("A pasta não respondeu", StatusMessage);
+        return null;
+    }
 
     /// <summary>
     /// Abre a pasta de origem ou de destino no gerenciador de arquivos. Para o destino, abre o destino efetivo;
-    /// se ele ainda não existe (primeira sincronização), abre a pasta escolhida e avisa.
+    /// se ele ainda não existe (primeira sincronização), abre a pasta escolhida e avisa. Pastas SFTP mostram o endereço.
     /// </summary>
     /// <param name="side"><c>source</c> para a origem; qualquer outro valor para o destino.</param>
     [RelayCommand]
@@ -1951,26 +2020,35 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(path))
         {
             StatusMessage = isSource ? "Escolha a origem primeiro." : "Escolha o destino primeiro.";
+            if (NotifyAsync != null) await NotifyAsync("Pasta não escolhida", StatusMessage);
             return;
         }
         if (RemoteAddress.IsRemote(path))
         {
-            StatusMessage = RemoteFolderMessage(path);
+            await ShowRemoteFolderAsync(path, isSource ? null : "A pasta ainda não existe no servidor; ela é criada na primeira sincronização.");
             return;
         }
-        if (Directory.Exists(path))
+
+        var exists = await LocalFolderExistsAsync(path);
+        if (exists == null) return;
+        if (exists == true)
         {
             OpenInFileManager(path);
             return;
         }
 
         var chosen = DestinationPath.Trim();
-        if (!isSource && Directory.Exists(chosen))
+        if (!isSource && !string.Equals(chosen, path, StringComparison.Ordinal))
         {
-            // Primeira sincronização: a subpasta com o nome da origem ainda não foi criada
-            OpenInFileManager(chosen);
-            StatusMessage = $"A subpasta {path} ainda não existe; ela é criada na primeira sincronização. Foi aberta a pasta escolhida.";
-            return;
+            var chosenExists = await LocalFolderExistsAsync(chosen);
+            if (chosenExists == null) return;
+            if (chosenExists == true)
+            {
+                // Primeira sincronização: a subpasta com o nome da origem ainda não foi criada
+                OpenInFileManager(chosen);
+                StatusMessage = $"A subpasta {path} ainda não existe; ela é criada na primeira sincronização. Foi aberta a pasta escolhida.";
+                return;
+            }
         }
 
         StatusMessage = $"A pasta {path} não existe ou não está acessível.";
@@ -1985,7 +2063,7 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     /// <param name="side"><c>source</c> para a origem; qualquer outro valor para o destino.</param>
     [RelayCommand]
-    private void OpenItemLocation(string? side)
+    private async Task OpenItemLocationAsync(string? side)
     {
         var item = SelectedItem;
         if (item == null) return;
@@ -1994,11 +2072,20 @@ public partial class MainViewModel : ViewModelBase
 
         if (RemoteAddress.IsRemote(path))
         {
-            StatusMessage = RemoteFolderMessage(path);
+            var slash = path.LastIndexOf('/');
+            var remoteFolder = slash > path.IndexOf("://", StringComparison.Ordinal) + 3 ? path[..slash] : path;
+            await ShowRemoteFolderAsync(remoteFolder, "A pasta deste arquivo ainda não existe no servidor.");
             return;
         }
         var folder = Path.GetDirectoryName(path);
-        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+        if (string.IsNullOrEmpty(folder))
+        {
+            StatusMessage = "A pasta deste arquivo não existe (ainda).";
+            return;
+        }
+        var exists = await LocalFolderExistsAsync(folder);
+        if (exists == null) return;
+        if (exists == false)
         {
             StatusMessage = "A pasta deste arquivo não existe (ainda).";
             return;
@@ -2015,26 +2102,32 @@ public partial class MainViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(DestinationPath))
         {
             StatusMessage = "Por favor, selecione primeiro o diretório de destino.";
+            if (NotifyAsync != null) await NotifyAsync("Destino não escolhido", StatusMessage);
             return;
         }
+
+        var purpose = subFolder == PathHelper.TrashFolderName
+            ? "Ela é criada na primeira sincronização que mover para lá arquivos que existem só no destino."
+            : "Ela é criada na primeira sincronização que substituir um arquivo, para guardar a versão anterior.";
+
         if (RemoteAddress.IsRemote(EffectiveDestinationPath))
         {
-            StatusMessage = RemoteFolderMessage(EffectiveDestinationPath.TrimEnd('/') + "/" + subFolder);
+            var remote = EffectiveDestinationPath.TrimEnd('/') + "/" + subFolder;
+            await ShowRemoteFolderAsync(remote, $"A pasta {subFolder}/ ainda não existe no servidor. {purpose}");
             return;
         }
 
         try
         {
             var fullPath = Path.GetFullPath(Path.Combine(EffectiveDestinationPath, subFolder));
-            if (Directory.Exists(fullPath))
+            var exists = await LocalFolderExistsAsync(fullPath);
+            if (exists == null) return;
+            if (exists == true)
             {
                 OpenInFileManager(fullPath);
                 return;
             }
 
-            var purpose = subFolder == PathHelper.TrashFolderName
-                ? "Ela é criada na primeira sincronização que mover para lá arquivos que existem só no destino."
-                : "Ela é criada na primeira sincronização que substituir um arquivo, para guardar a versão anterior.";
             var message = $"A pasta {subFolder}/ ainda não existe em {EffectiveDestinationPath}. {purpose}";
             StatusMessage = message;
             if (NotifyAsync != null)

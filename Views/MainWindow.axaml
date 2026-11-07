@@ -1001,29 +1001,43 @@
                             </StackPanel>
                         </Border>
 
-                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
-                            <Button Classes="tile" Command="{Binding OpenTrashFolderCommand}">
+                        <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12">
+                            <Button Classes="tile" Command="{Binding OpenSideFolderCommand}" CommandParameter="source"
+                                    ToolTip.Tip="{Binding SourcePath}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Abrir origem" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" Text="{Binding SourcePath}" TextTrimming="LeadingCharacterEllipsis" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Classes="tile" Command="{Binding OpenSideFolderCommand}" CommandParameter="destination"
+                                    ToolTip.Tip="{Binding EffectiveDestinationPath}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Abrir destino" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" Text="{Binding EffectiveDestinationPath}" TextTrimming="LeadingCharacterEllipsis" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="2" Classes="tile" Command="{Binding ScanCommand}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Nova análise (F5)" FontWeight="SemiBold" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Confere se origem e destino ficaram iguais." />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Row="1" Classes="tile" Command="{Binding OpenTrashFolderCommand}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Abrir lixo/" FontWeight="SemiBold" />
                                     <TextBlock Classes="caption" TextWrapping="Wrap" Text="Arquivos que existiam só no destino." />
                                 </StackPanel>
                             </Button>
-                            <Button Grid.Column="1" Classes="tile" Command="{Binding OpenOldFolderCommand}">
+                            <Button Grid.Row="1" Grid.Column="1" Classes="tile" Command="{Binding OpenOldFolderCommand}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Abrir old/" FontWeight="SemiBold" />
                                     <TextBlock Classes="caption" TextWrapping="Wrap" Text="Versões substituídas. Data e hora entram no nome só se ele já existir em old/." />
                                 </StackPanel>
                             </Button>
-                            <Button Grid.Column="2" Classes="tile" Command="{Binding ExportReportCommand}">
+                            <Button Grid.Row="1" Grid.Column="2" Classes="tile" Command="{Binding ExportReportCommand}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Exportar relatório CSV" FontWeight="SemiBold" />
                                     <TextBlock Classes="caption" TextWrapping="Wrap" Text="Plano e resultado, arquivo por arquivo." />
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="3" Classes="tile" Command="{Binding ScanCommand}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Nova análise (F5)" FontWeight="SemiBold" />
-                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Confere se origem e destino ficaram iguais." />
                                 </StackPanel>
                             </Button>
                         </Grid>

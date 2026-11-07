@@ -305,7 +305,7 @@ public static class RemoteConnections
             catch (Exception ex) when (ex is SshException or IOException or UnauthorizedAccessException or ArgumentException)
             {
                 throw new RemoteAccessException(RemoteAccessProblem.KeyFileProblem, address,
-                    $"O arquivo de chave {keyFile} não pôde ser lido: {ex.Message}", inner: ex);
+                    $"O arquivo de chave {keyFile} não pôde ser lido: {ErrorMessages.AfterColon(ex.Message)}", inner: ex);
             }
             methods.Add(new PrivateKeyAuthenticationMethod(address.User, key));
         }
@@ -381,7 +381,7 @@ public static class RemoteConnections
         {
             client.Dispose();
             throw new RemoteAccessException(RemoteAccessProblem.Unreachable, address,
-                $"Não foi possível conectar a {address.HostPortKey}: {ex.Message}", inner: ex);
+                $"Não foi possível conectar a {address.HostPortKey}: {ErrorMessages.AfterColon(ex.Message)}", inner: ex);
         }
     }
 }
