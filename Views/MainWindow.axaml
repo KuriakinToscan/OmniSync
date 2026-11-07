@@ -513,7 +513,7 @@
                                         <TextBlock Text="{Binding ScanWarningsLinkText}" FontWeight="SemiBold" />
                                     </StackPanel>
                                     <Button.Flyout>
-                                        <Flyout Placement="BottomEdgeAlignedRight">
+                                        <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="warnings">
                                             <ScrollViewer MaxWidth="520" MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
                                                 <ItemsControl ItemsSource="{Binding ScanWarnings}">
                                                     <ItemsControl.ItemTemplate>
