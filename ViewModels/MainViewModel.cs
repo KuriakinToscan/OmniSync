@@ -1146,17 +1146,6 @@ public partial class MainViewModel : ViewModelBase
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Calcula o caminho efetivo do diretório de destino.
-    /// Quando <see cref="UseSourceFolderNameInDestination"/> está ativo (ou quando o destino é a raiz de um disco, ex.: <c>G:\</c>),
-    /// anexa automaticamente o nome da pasta de origem caso ainda não conste no final do caminho de destino.
-    /// </summary>
-    /// <param name="sourcePath">Caminho da pasta de Origem.</param>
-    /// <param name="destPath">Caminho da pasta de Destino informada.</param>
-    /// <returns>Caminho de destino resolvido com segurança.</returns>
-    public string ResolveEffectiveDestinationPath(string sourcePath, string destPath) =>
-        PathHelper.ResolveEffectiveDestination(sourcePath, destPath, UseSourceFolderNameInDestination);
-
-    /// <summary>
     /// Abre o seletor de pastas para escolha do diretório de Origem.
     /// </summary>
     [RelayCommand]

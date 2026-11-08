@@ -164,17 +164,6 @@ public partial class SyncItem : ObservableObject
     /// </summary>
     public string FolderDisplay => string.IsNullOrEmpty(FolderPath) ? "(raiz)" : FolderPath;
 
-    /// <summary>
-    /// Lado com a versão mais recente, para a coluna "Mais recente" da lista.
-    /// </summary>
-    public string NewerSideText => ConflictDirection switch
-    {
-        ConflictDirection.SourceNewer => "Origem",
-        ConflictDirection.DestinationNewer => "Destino",
-        ConflictDirection.SameTime => "Mesma hora",
-        _ => "—"
-    };
-
     /// <summary>Indica conflito em que a origem é mais recente.</summary>
     public bool IsSourceNewer => ConflictDirection == ConflictDirection.SourceNewer;
 

@@ -17,7 +17,7 @@ namespace OmniSync.Services;
 public sealed partial class RestoreService
 {
     /// <summary>
-    /// Sufixo de desambiguação acrescentado por <see cref="PathHelper.GetUniqueTargetPath"/> (ex.: <c>_20261028_114500</c> ou <c>_20261028_114500_2</c>).
+    /// Sufixo de desambiguação acrescentado por <see cref="PathHelper.GetUniqueTargetPath(IFileSystem, string)"/> (ex.: <c>_20261028_114500</c> ou <c>_20261028_114500_2</c>).
     /// </summary>
     [GeneratedRegex(@"_\d{8}_\d{6}(_\d+)?$")]
     private static partial Regex CollisionSuffixRegex();

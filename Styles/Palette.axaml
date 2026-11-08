@@ -18,8 +18,6 @@
             <SolidColorBrush x:Key="OsAccentBrush" Color="#0E6E6D" />
             <SolidColorBrush x:Key="OsAccentSoftBrush" Color="#E6F2F2" />
             <SolidColorBrush x:Key="OsAccentTextBrush" Color="#0B5E5D" />
-            <SolidColorBrush x:Key="OsChipActiveBrush" Color="#E6F2F2" />
-            <SolidColorBrush x:Key="OsChipActiveTextBrush" Color="#0B5E5D" />
             <SolidColorBrush x:Key="OsNewBrush" Color="#1D5FD1" />
             <SolidColorBrush x:Key="OsConflictBrush" Color="#B54708" />
             <SolidColorBrush x:Key="OsConflictSoftBrush" Color="#FDF1E8" />
@@ -51,8 +49,6 @@
             <SolidColorBrush x:Key="OsAccentBrush" Color="#2FA3A1" />
             <SolidColorBrush x:Key="OsAccentSoftBrush" Color="#16393A" />
             <SolidColorBrush x:Key="OsAccentTextBrush" Color="#7FD3D1" />
-            <SolidColorBrush x:Key="OsChipActiveBrush" Color="#16393A" />
-            <SolidColorBrush x:Key="OsChipActiveTextBrush" Color="#7FD3D1" />
             <SolidColorBrush x:Key="OsNewBrush" Color="#7AA7F5" />
             <SolidColorBrush x:Key="OsConflictBrush" Color="#F0A15E" />
             <SolidColorBrush x:Key="OsConflictSoftBrush" Color="#3A2717" />

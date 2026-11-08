@@ -32,7 +32,7 @@ public static class TextSearch
     }
 
     /// <summary>
-    /// Indica se <paramref name="text"/> contém <paramref name="query"/>, ignorando maiúsculas e acentos.
+    /// Indica se <paramref name="text"/> contém <paramref name="foldedQuery"/>, ignorando maiúsculas e acentos.
     /// </summary>
     /// <param name="text">Texto onde procurar.</param>
     /// <param name="foldedQuery">Busca já normalizada por <see cref="Fold"/>.</param>

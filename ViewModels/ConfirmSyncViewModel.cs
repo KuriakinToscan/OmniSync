@@ -82,13 +82,6 @@ public partial class ConfirmSyncViewModel : ViewModelBase
         $"Entendo que {Summary.OrphanCount:N0} {(Summary.OrphanCount == 1 ? "arquivo" : "arquivos")} ({Summary.OrphanPercent:n0}% do destino) {(Summary.OrphanCount == 1 ? "será movido" : "serão movidos")} para lixo/.";
 
     /// <summary>
-    /// Origem e destino em uma linha.
-    /// </summary>
-    public string RouteText => string.IsNullOrWhiteSpace(Summary.SourcePath)
-        ? Summary.DestinationPath
-        : $"{Summary.SourcePath}  →  {Summary.DestinationPath}";
-
-    /// <summary>
     /// Parcela do destino que irá para <c>lixo/</c>.
     /// </summary>
     public string OrphanShareText => Summary.DestinationFileCount > 0

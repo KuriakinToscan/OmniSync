@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -73,9 +72,6 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
         _shellFactory = shellFactory;
         _preferReadBack = preferReadBack;
     }
-
-    /// <summary>Endereço da conexão.</summary>
-    public RemoteAddress Endpoint => _endpoint;
 
     /// <summary>Indica se a conexão está aberta.</summary>
     public bool IsConnected => _client.IsConnected;
