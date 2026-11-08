@@ -16,14 +16,14 @@ Diferente de ferramentas tradicionais que apagam ou sobrescrevem arquivos irreve
 1. **Arquivos Idênticos (Ignorados)**: Arquivos presentes na Origem e no Destino com o mesmo tamanho e data de modificação (ou mesmo hash **SHA-256**) não são copiados novamente.
 2. **Arquivos Novos (Cópia Incremental)**: Arquivos que existem na Origem e ainda não existem no Destino são copiados preservando toda a hierarquia de subpastas e o timestamp original.
 3. **Arquivos Órfãos (`destino/lixo/`)**: Arquivos que não existem mais na Origem, mas permanecem no Destino, **nunca são excluídos** — são movidos para `<Destino>/lixo/<caminho_relativo>` e podem ser restaurados seletivamente, sem sobrescrever nada.
-4. **Arquivos Conflitantes (`destino/old/`)**: Quando um arquivo existe nos dois lados com conteúdo diferente, a prévia indica qual lado é mais recente. A decisão (**Substituir**, **Ignorar** ou **Mais recente vence**) pode ser tomada na própria tabela antes de sincronizar, ou em um modal comparativo durante a execução. Ao substituir, a versão anterior é preservada em `<Destino>/old/<caminho_relativo>`.
+4. **Arquivos Conflitantes (`destino/old/`)**: Quando um arquivo existe nos dois lados com conteúdo diferente, a prévia indica qual lado é mais recente. A decisão (**Substituir**, **Manter destino** ou, em lote, **Mais recente vence**) pode ser tomada na própria tabela antes de sincronizar, ou em um modal comparativo durante a execução. Ao substituir, a versão anterior é preservada em `<Destino>/old/<caminho_relativo>`.
 5. **Subpasta Automática por Nome da Origem**: Ao selecionar uma pasta de origem (ex.: `E:\Projetos`) e apontar para a raiz de outro drive (ex.: `G:\`), o OmniSync direciona automaticamente a sincronização para `G:\Projetos`, protegendo as demais pastas do disco de destino. O campo Destino guarda só a pasta escolhida; a linha **Sincroniza em** mostra o destino efetivo.
 6. **Escrita atômica e confirmação prévia**: cada cópia é gravada em arquivo temporário e renomeada ao final (cancelamentos e quedas de rede não deixam arquivos truncados). Antes de executar, uma janela resume o plano e exige confirmação explícita quando grande parte do destino iria para `lixo/`.
 7. **Auditoria**: log diário completo em arquivo, janela **Registro** com filtro e cópia, e exportação do plano/resultado em CSV (cabeçalho ASCII, com colunas de código). Erros do sistema aparecem em português; a mensagem original fica no log.
 8. **Tarefas salvas**: cada combinação de origem, destino e opções fica salva na barra lateral, com o estado da última execução. Trocar de tarefa carrega a configuração e descarta o plano anterior.
 9. **Decisões seguras**: nenhum conflito vem pré-selecionado; decisões tomadas voltam após uma nova análise se os arquivos não mudaram; substituir uma versão mais nova do destino exige confirmação própria na revisão; origem e destino iguais ou aninhados são apontados na hora.
-10. **Agendamento e instalação**: cada tarefa pode rodar sozinha (todo dia, em dias da semana ou ao entrar no sistema), pelo Agendador de Tarefas do Windows ou pelo systemd no Linux, sincronizando ou só analisando e avisando. Ao abrir, o OmniSync oferece instalar-se numa pasta fixa do usuário, com atalhos na área de trabalho e no menu Iniciar.
-11. **Servidores SFTP (v2.0)**: origem ou destino `sftp://usuario@servidor/pasta` (NAS, servidor Linux, OpenSSH do Windows), com favoritos, senha no cofre do sistema (Gerenciador de Credenciais / libsecret), confirmação da chave do servidor e as mesmas garantias de `lixo/`, `old/` e temporário. Cada cópia é conferida pelo SHA-256 calculado no próprio servidor (ou pelo tamanho, em servidor só-SFTP); queda do servidor interrompe a execução sem deixar cópia parcial, e a próxima continua de onde parou.
+10. **Agendamento e instalação**: cada tarefa pode rodar sozinha (todo dia, em dias da semana ou ao entrar no sistema), pelo Agendador de Tarefas do Windows ou pelo systemd no Linux, sincronizando ou só analisando e avisando; o aviso ao fim tem **Adiar** (15 min, 1 h, 4 h ou um horário) quando repetir mais tarde pode resolver. Ao abrir, o OmniSync oferece instalar-se numa pasta fixa do usuário, com atalhos na área de trabalho e no menu Iniciar.
+11. **Servidores SFTP (v2.0)**: origem ou destino `sftp://usuario@servidor/pasta` (NAS, servidor Linux, OpenSSH do Windows), com favoritos, senha no cofre do sistema (Gerenciador de Credenciais / libsecret), confirmação da chave do servidor e as mesmas garantias de `lixo/`, `old/` e temporário. Cada cópia é conferida pelo SHA-256 calculado no próprio servidor (ou pelo tamanho, em servidor só-SFTP); queda do servidor interrompe a execução sem deixar cópia parcial, e a próxima continua de onde parou. Desde a 2.0.1, o envio não espera a confirmação de cada pedaço e até 4 arquivos novos seguem ao mesmo tempo, o que torna o SFTP utilizável em VPN com latência alta.
 
 ### Interface
 
@@ -53,7 +53,9 @@ Conflitos sem decisão mantêm o destino (ou, com `--conflitos origem-mais-nova`
 ## 📚 Documentação Completa
 
 - 📖 **[Manual do Usuário](docs/MANUAL_DO_USUARIO.md)** — Guia passo a passo de instalação, configuração de pastas locais e NAS, resolução de conflitos e restauração de arquivos.
-- 🛠️ **[Documentação Técnica e de Desenvolvimento](docs/DOCUMENTACAO_TECNICA.md)** — Arquitetura MVVM, funcionamento interno do `SyncEngine`, concorrência, tratamento de erros e instruções de build/testes.
+- 🛠️ **[Documentação Técnica e de Desenvolvimento](docs/DOCUMENTACAO_TECNICA.md)** — Arquitetura MVVM, funcionamento interno do `SyncEngine`, SFTP, agendamento, testes (inclusive SFTP), CI e como lançar uma versão.
+- 📑 **[Referência](docs/REFERENCIA.md)** — Pasta de dados, formato do `settings.json`, histórico, log, relatório CSV e linha de comando.
+- 📝 **[Histórico de versões](CHANGELOG.md)** — O que mudou em cada versão.
 
 ---
 
@@ -97,49 +99,61 @@ chmod +x publish/linux-x64/OmniSync
 ```text
 OmniSync/
 ├── Assets/                     # Ícone do aplicativo (PNG e ICO)
-├── Cli/                        # Modo de linha de comando (--listar, --analisar, --sincronizar, --agendado)
+├── Cli/                        # Linha de comando: CliCommand (argumentos), CliRunner (execução), ConsoleHost (console no Windows)
 ├── Models/                     # Modelos de dados e enums de domínio
 │   ├── SyncActionType.cs       # Tipos de ação, resolução e direção do conflito
 │   ├── SyncContracts.cs        # Opções/resultado da varredura, atualizações de item, balanço, lixo/
 │   ├── SyncItem.cs             # Representação observável de cada arquivo analisado
 │   ├── SyncProfile.cs          # Tarefa salva: origem, destino, opções e última execução
 │   ├── SyncSchedule.cs         # Agendamento da tarefa (frequência, horário, modo, conflitos)
+│   ├── RemoteFavorite.cs       # Favorito SFTP (nome, endereço, chave; nunca a senha)
 │   └── SyncProgressReport.cs   # Telemetria de progresso, velocidade (MB/s) e ETA
 ├── Services/                   # Regras de negócio, sem dependência da interface
 │   ├── ISyncEngine.cs          # Interface do motor de sincronização
-│   ├── SyncEngine.cs           # Varredura paralela, SHA-256 paralelo, cópia atômica com retentativa
+│   ├── SyncEngine.cs           # Varredura paralela, SHA-256 paralelo, cópia atômica conferida, retentativa
+│   ├── FileSystems/            # IFileSystem: LocalFileSystem (disco/SMB), SftpFileSystem + SftpUploadStream, RemoteAddress
+│   ├── Remote/                 # RemoteConnections (conexões e chave do servidor), CredentialStore (cofre do sistema)
+│   ├── Scheduling/             # Agendador do Windows (schtasks) e Linux (systemd), ScheduleHealth, SnoozeService (Adiar)
 │   ├── RestoreService.cs       # Restauração não destrutiva de lixo/
-│   ├── PathHelper.cs           # Comparação de caminhos por SO e movimentações seguras
+│   ├── PathHelper.cs           # Comparação de caminhos por SO, destino efetivo e movimentações seguras
+│   ├── PathProbe.cs            # Teste de pasta com tempo-limite (rede caída não trava a janela)
+│   ├── ErrorMessages.cs        # Erros do sistema em português
+│   ├── TextMatching.cs         # Busca sem acentos, plural e ordem natural
 │   ├── FileLogService.cs       # Log diário em arquivo
-│   ├── SettingsService.cs      # Tarefas salvas (JSON) e migração do formato 1.1
+│   ├── SettingsService.cs      # Tarefas salvas (JSON), favoritos, chaves de servidor e migração do formato 1.1
 │   ├── ReportExporter.cs       # Exportação CSV
 │   ├── SyncSafety.cs           # Critério de remoção em massa (interface e linha de comando)
-│   ├── Scheduling/             # Agendador do sistema: Windows (schtasks) e Linux (systemd), verificação
 │   ├── RunHistory.cs           # Histórico de execuções por tarefa (history/<id>.json)
 │   ├── TaskLock.cs             # Trava por tarefa (interface x agendamento)
-│   ├── AppInstaller.cs         # Instalação na pasta fixa do usuário
+│   ├── AppInstaller.cs         # Instalação na pasta fixa do usuário e versão do executável
 │   ├── ShortcutService.cs      # Atalhos na área de trabalho e no menu Iniciar
 │   └── AppPaths.cs             # Pasta de dados por usuário
 ├── ViewModels/                 # Camada MVVM de apresentação e comandos
 │   ├── MainViewModel.cs        # Tarefas, telas, análise, confirmação, execução, filtros, restauração
 │   ├── MainViewModel.Schedule.cs # Cartão de agendamento, verificação e histórico
+│   ├── MainViewModel.Remote.cs # Favoritos, conexão SFTP e Testar conexão
 │   ├── ProfileItemViewModel.cs # Item da barra lateral de tarefas
 │   ├── FolderTree.cs           # Árvore "pastas com alterações"
+│   ├── DecisionMemory.cs       # Decisões de conflito mantidas entre análises
 │   ├── ConflictDialogViewModel.cs / ConfirmSyncViewModel.cs / RestoreViewModel.cs
 │   ├── UiBatchQueue.cs         # Entrega em lote de log e status à thread de UI
 │   └── UiModels.cs             # Filtros, entradas de log e resumo do plano
-├── Views/                      # Interfaces gráficas declarativas (Avalonia XAML)
+├── Views/                      # Interfaces gráficas (Avalonia XAML e janelas em código)
 │   ├── MainWindow.axaml(.cs)   # Janela principal
-│   ├── ConflictDialogWindow / ConfirmSyncWindow / RestoreWindow / MessageDialog
+│   ├── ConflictDialogWindow / ConfirmSyncWindow / RestoreWindow / LogWindow / MessageDialog
+│   ├── FavoritesWindow.cs / RemoteDialogs.cs # Favoritos SFTP, chave do servidor e senha
 │   ├── InstallWindow.cs        # Oferta de instalação com atalhos
-│   ├── NotificationWindow.cs   # Aviso ao fim de uma execução agendada
+│   ├── NotificationWindow.cs   # Aviso ao fim de uma execução agendada, com Adiar
+│   ├── ClockFace.cs / ClockTimePicker.cs # Seletor de horário com relógio
 │   ├── ProportionBar.cs        # Barra proporcional do resumo do plano
+│   ├── WindowPlacement.cs      # Janelas auxiliares dentro da tela
 │   └── Converters.cs
 ├── Styles/                     # Paleta claro/escuro, ícones vetoriais e estilos
-├── Tests/                      # Testes automatizados (xUnit)
-├── docs/                       # Manuais de usuário e documentação de arquitetura
+├── Tests/                      # Testes automatizados (xUnit), MemoryFileSystem e LatencyProxy
+├── docs/                       # Manual do usuário, documentação técnica e referência
+├── CHANGELOG.md                # Histórico de versões
 ├── App.axaml(.cs)              # Configuração global da aplicação e handler de exceções UI
-└── Program.cs                  # Ponto de entrada e diagnóstico de falhas (crash.log na pasta de dados)
+└── Program.cs                  # Ponto de entrada (janela, linha de comando ou aviso) e crash.log
 ```
 
 ---

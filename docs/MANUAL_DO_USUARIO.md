@@ -7,7 +7,7 @@ Manual do **OmniSync**, sincronizador visual de arquivos para **Windows e Linux*
 ## Índice
 1. [Visão Geral da Interface](#1-visão-geral-da-interface)
 2. [Passo a Passo de Uso](#2-passo-a-passo-de-uso)
-3. [Sincronizando com NAS / Rede (SMB / NFS)](#3-sincronizando-com-nas--rede-smb--nfs)
+3. [NAS, Rede e Servidores SFTP](#3-nas-rede-e-servidores-sftp)
 4. [Entendendo as Categorias de Arquivos](#4-entendendo-as-categorias-de-arquivos)
 5. [Resolvendo Conflitos de Arquivos](#5-resolvendo-conflitos-de-arquivos)
 6. [Restaurando Arquivos das Pastas `lixo/` e `old/`](#6-restaurando-arquivos-das-pastas-lixo-e-old)
@@ -22,7 +22,7 @@ Manual do **OmniSync**, sincronizador visual de arquivos para **Windows e Linux*
 
 A janela tem um cabeçalho, uma barra lateral e uma área principal que muda conforme a etapa.
 
-- **Cabeçalho**: nome da tarefa ativa (clique no nome ou no lápis para renomear), **Registro** (janela redimensionável com o log da sessão, filtro **Avisos e erros** e **Copiar**) e **Logs** (pasta com o histórico completo).
+- **Cabeçalho**: versão do OmniSync (ex.: `v2.0.2`), nome da tarefa ativa (clique no nome ou no lápis para renomear), **Registro** (janela redimensionável com o log da sessão, filtro **Avisos e erros** e **Copiar**) e **Logs** (pasta com o histórico completo).
 - **Barra lateral · Tarefas**: cada tarefa guarda origem, destino e opções. O ponto colorido indica o estado:
   - cinza: sem análise ou nunca sincronizado;
   - laranja: plano analisado aguardando sincronização;
@@ -67,7 +67,7 @@ Em janelas com menos de 1.240 px de largura, a árvore de pastas é ocultada par
 2. Leia os avisos da análise, se houver, e confira o resumo.
 3. Use a árvore, os filtros e a busca para revisar o plano. Para conflitos, decida no painel de detalhes ou pelo menu **Decidir em lote**.
 
-Se você alterar pastas ou opções depois da análise (botão **Alterar**), o plano é descartado e uma nova análise é exigida.
+**Alterar** volta à configuração sem perder o plano: enquanto nada mudar, **Voltar ao plano** retoma o plano como estava, com as decisões. Se você mudar uma pasta ou uma opção, o plano é descartado e uma nova análise é exigida.
 
 ### Etapa 3: sincronizar
 1. Clique em **Revisar e sincronizar** (ou Ctrl+Enter).
@@ -78,7 +78,7 @@ Se você alterar pastas ou opções depois da análise (botão **Alterar**), o p
 
 ---
 
-## 3. Sincronizando com NAS / Rede (SMB / NFS)
+## 3. NAS, Rede e Servidores SFTP
 
 - **Windows**: use uma unidade mapeada (ex.: `Z:\Backups`) ou digite o caminho UNC:
   ```text
@@ -97,6 +97,7 @@ sftp://usuario@servidor/pasta
 sftp://usuario@servidor:2222/volume1/backup
 ```
 
+- **VPN:** se o nome do servidor não for encontrado pela VPN (comum em redes corporativas), use o endereço IP no lugar do nome, por exemplo `sftp://usuario@10.0.0.5/share/pasta`.
 - A porta padrão é 22. O caminho é o caminho completo da pasta no servidor (no OpenSSH do Windows, algo como `/C:/Users/usuario/Backup`).
 - **Remoto…**, ao lado de **Escolher pasta…**, lista os **favoritos** (servidores salvos com nome) e abre o cadastro. No cadastro:
   - informe servidor, porta, usuário, pasta e a forma de entrar (senha ou arquivo de chave, como `id_ed25519`);
@@ -135,6 +136,8 @@ sftp://usuario@servidor:2222/volume1/backup
   - **Manter o destino em todos**.
 
 Conflitos sem decisão aparecem em laranja na lista e são contados na barra inferior.
+
+**Decisões guardadas:** se o plano for descartado (nova análise, troca de tarefa), as decisões tomadas voltam na análise seguinte da mesma origem e destino para os arquivos que não mudaram de tamanho nem de data nos dois lados. Arquivo que mudou volta como **Perguntar na hora**.
 
 ### Durante a sincronização
 Conflitos ainda em **Perguntar na hora** abrem uma janela comparativa com tamanho e data dos dois lados e um selo **mais recente**. Se o destino for mais novo, um alerta avisa que substituir trocaria uma versão mais nova por uma mais antiga. A opção **Aplicar aos demais conflitos** reaproveita a escolha.
@@ -176,10 +179,16 @@ Falhas transitórias de E/S são repetidas até 3 vezes, com espera progressiva.
 **3. Onde ficam os registros?**
 - Log completo de cada dia: `omnisync-AAAAMMDD.log` na pasta de logs (botão **Logs**).
 - Falhas inesperadas: `crash.log`.
-- Pasta de dados: `%LOCALAPPDATA%\OmniSync` no Windows; `~/.local/share/OmniSync` no Linux. As tarefas salvas ficam em `settings.json` na mesma pasta. Ao abrir a versão 1.2 pela primeira vez, as pastas e opções da versão anterior viram uma tarefa salva. Destinos gravados com a subpasta da origem por versões anteriores são corrigidos para a pasta escolhida.
+- Pasta de dados: `%LOCALAPPDATA%\OmniSync` no Windows; `~/.local/share/OmniSync` no Linux. As tarefas salvas ficam em `settings.json` na mesma pasta. A lista completa de arquivos está na [Referência](REFERENCIA.md#1-pasta-de-dados).
 
 **4. Todos os arquivos de um pendrive aparecem como conflito depois da mudança de horário.**
 Ative **Tolerar 1 h (horário de verão)**. Mídias FAT/exFAT gravam hora local e mudam 1 hora quando o fuso muda.
+
+**5. Como sei qual versão estou usando?**
+A versão aparece no cabeçalho, ao lado do nome OmniSync (ex.: `v2.0.2`). Pelo terminal: `OmniSync.exe --versao | Out-Host`.
+
+**6. O Windows mostra "O Windows protegeu o computador" ao abrir o executável.**
+É o SmartScreen: o executável ainda não é assinado digitalmente, e o aviso aparece em arquivos baixados sem assinatura. Se o arquivo veio do repositório oficial ou de quem mantém o OmniSync, clique em **Mais informações** › **Executar assim mesmo**. A assinatura do executável está em estudo.
 
 ---
 
@@ -193,6 +202,7 @@ As tarefas salvas na interface também podem ser analisadas e sincronizadas pelo
 | `OmniSync.exe --analisar "Volume"` | Só analisa e mostra o plano (novos, conflitos, `lixo/`, idênticos). Não altera nada. |
 | `OmniSync.exe --sincronizar "Volume"` | Analisa e sincroniza. |
 | `OmniSync.exe --ajuda` | Mostra a ajuda. |
+| `OmniSync.exe --versao` | Mostra a versão (ex.: `OmniSync 2.0.2`). |
 
 O nome da tarefa não diferencia maiúsculas nem acentos (`"volume"` encontra `Volume`). Se houver duas tarefas com o mesmo nome, o comando é recusado e mostra os identificadores; use o identificador no lugar do nome.
 
@@ -256,7 +266,11 @@ O agendamento é registrado no **Agendador de Tarefas do Windows** (pasta `OmniS
 As regras sem perguntas são as da linha de comando: conflitos seguem a opção do cartão, e remoção em massa **aborta sem alterar nada**. Se a interface estiver sincronizando a mesma tarefa, a execução agendada não faz nada (código 6), e vice-versa.
 
 ### Aviso ao fim
-Ao terminar, uma janela pequena aparece no canto inferior direito quando há algo a dizer: alterações sincronizadas, alterações pendentes (modo *Só analisar*), falhas, sincronização abortada ou erro. Execuções sem nada a fazer não mostram aviso. **Abrir OmniSync** abre a interface. Avisos de problema ficam na tela até você fechar; os demais fecham sozinhos após 30 s.
+Ao terminar, uma janela pequena aparece no canto inferior direito quando há algo a dizer: alterações sincronizadas, alterações pendentes (modo *Só analisar*), falhas, sincronização abortada ou erro. Execuções sem nada a fazer não mostram aviso. **Abrir OmniSync** abre a interface.
+
+**Adiar:** quando repetir mais tarde pode resolver (alterações pendentes no modo *Só analisar*, sincronização com falhas, servidor inacessível), o aviso traz o botão **Adiar ▾**, com 15 min, 1 h, 4 h ou **Escolher horário…** (relógio; se o horário já passou hoje, vale para amanhã). O OmniSync registra uma execução única no agendador do sistema, que repete a mesma tarefa no horário escolhido e só avisa de novo se ainda houver o que avisar. Cada tarefa tem no máximo um adiamento pendente: adiar de novo substitui o anterior, e a execução normal do agendamento cancela o pendente. Avisos em que repetir não mudaria nada (sincronizada sem falhas, remoção em massa abortada, senha ou chave do servidor pendente) não têm Adiar.
+
+Avisos de problema e avisos com **Adiar** ficam na tela até você escolher ou fechar; os demais fecham sozinhos após 30 s (o tempo para enquanto o mouse estiver sobre a janela).
 
 ### Histórico e verificação
 O cartão mostra a próxima execução, a última execução agendada e as 5 execuções mais recentes (manuais e agendadas). O histórico guarda as 30 últimas por tarefa.
