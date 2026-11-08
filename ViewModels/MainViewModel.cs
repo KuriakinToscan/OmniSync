@@ -557,6 +557,11 @@ public partial class MainViewModel : ViewModelBase
     public bool CanEditConflicts => !IsBusy && ConflictCount > 0;
 
     /// <summary>
+    /// Versão do executável exibida no cabeçalho (ex.: "v2.0.2").
+    /// </summary>
+    public string AppVersionText { get; } = "v" + AppInstaller.CurrentVersion;
+
+    /// <summary>
     /// Indica se é possível trocar de tarefa, criar ou remover tarefas.
     /// </summary>
     public bool CanManageProfiles => !IsBusy;

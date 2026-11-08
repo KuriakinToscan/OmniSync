@@ -240,12 +240,23 @@ public static class RemoteConnections
         if (Cache.TryRemove(address.EndpointKey, out var fs)) fs.Dispose();
     }
 
-    /// <summary>Fecha todas as conexões (ao sair).</summary>
+    /// <summary>
+    /// Fecha todas as conexões. Chamado ao fechar a janela e ao fim da linha de comando, para o servidor ver um
+    /// encerramento normal em vez de queda. Falhas ao fechar são ignoradas (a conexão pode já ter caído).
+    /// </summary>
     public static void DisconnectAll()
     {
         foreach (var key in Cache.Keys.ToList())
         {
-            if (Cache.TryRemove(key, out var fs)) fs.Dispose();
+            if (!Cache.TryRemove(key, out var fs)) continue;
+            try
+            {
+                fs.Dispose();
+            }
+            catch (Exception)
+            {
+                // Encerramento: nada a fazer se a conexão já não existe
+            }
         }
     }
 

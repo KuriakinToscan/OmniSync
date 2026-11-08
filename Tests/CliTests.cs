@@ -69,6 +69,25 @@ public class CliTests : IDisposable
 
         Assert.True(CliCommand.TryParse(new[] { "--sincronizar", "X", "--ajuda" }, out cmd, out _));
         Assert.Equal(CliAction.Help, cmd!.Action);
+
+        Assert.True(CliCommand.TryParse(new[] { "--versao" }, out cmd, out _));
+        Assert.Equal(CliAction.Version, cmd!.Action);
+        Assert.True(CliCommand.TryParse(new[] { "--version" }, out cmd, out _));
+        Assert.Equal(CliAction.Version, cmd!.Action);
+    }
+
+    /// <summary>
+    /// --versao mostra o número da versão do executável e sai com 0, sem ler as tarefas.
+    /// </summary>
+    [Fact]
+    public async Task Version_PrintsAssemblyVersion()
+    {
+        var output = new StringWriter();
+        var runner = new CliRunner(new SyncEngine(), output, Path.Combine(Path.GetTempPath(), "omnisync-inexistente.json"));
+        var code = await runner.RunAsync(new CliCommand(CliAction.Version), CancellationToken.None);
+        Assert.Equal(CliExitCode.Success, code);
+        Assert.Equal($"OmniSync {AppInstaller.CurrentVersion}", output.ToString().Trim());
+        Assert.Matches(@"^\d+\.\d+\.\d+$", AppInstaller.CurrentVersion);
     }
 
     /// <summary>
