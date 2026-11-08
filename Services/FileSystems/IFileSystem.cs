@@ -108,6 +108,14 @@ public interface IFileSystem
     void DeleteEmptyDirectory(string path);
 
     /// <summary>
+    /// Esquece o que foi memorizado sobre o conteúdo (ex.: pastas já confirmadas no SFTP), para que a próxima operação
+    /// confira de novo. O motor chama no início de cada execução, porque o destino pode ter mudado por fora entre uma e outra.
+    /// </summary>
+    void ForgetCachedState()
+    {
+    }
+
+    /// <summary>
     /// Forma de conferir as cópias gravadas neste sistema de arquivos. O padrão é reler o arquivo.
     /// </summary>
     CopyCheck CopyCheck => CopyCheck.ReadBack;

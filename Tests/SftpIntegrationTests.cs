@@ -488,6 +488,55 @@ public sealed class SftpIntegrationTests : IDisposable
     }
 
     /// <summary>
+    /// Gravação sem esperar cada confirmação: criar sobre um arquivo existente falha (até o fechamento) sem tocar
+    /// nele, como antes.
+    /// </summary>
+    [SftpFact]
+    public async Task CreateNew_ExistingFile_FailsWithoutTouchingIt()
+    {
+        var fs = await ConnectTrustingAsync();
+        var path = _remote!.ToString() + "/existe.txt";
+        WriteRemote(fs, path, "original", OldTime);
+
+        await Assert.ThrowsAnyAsync<IOException>(async () =>
+        {
+            await using var stream = fs.CreateNew(path, 4, readBack: false);
+            await stream.WriteAsync(new byte[] { 1, 2, 3, 4 });
+        });
+
+        Assert.Equal("original", ReadRemote(fs, path));
+    }
+
+    /// <summary>
+    /// Conexão que cai no meio da gravação: a falha chega à escrita ou ao fechamento como <see cref="IOException"/>
+    /// (que o motor repete), sem travar esperando confirmações que não virão.
+    /// </summary>
+    [SftpFact]
+    public async Task CreateNew_ConnectionDropsMidUpload_FailsQuickly()
+    {
+        var fs = await ConnectTrustingAsync();
+        fs.CreateDirectory(_remote!.ToString());
+        var path = _remote.ToString() + "/queda.bin";
+        var chunk = new byte[2 * 1024 * 1024];
+
+        var started = DateTime.UtcNow;
+        await Assert.ThrowsAnyAsync<IOException>(async () =>
+        {
+            await using var stream = fs.CreateNew(path, chunk.Length * 16L, readBack: false);
+            for (int i = 0; i < 16; i++)
+            {
+                if (i == 2) fs.DropConnectionForTest();
+                await stream.WriteAsync(chunk);
+            }
+        });
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(30), "a queda não pode travar a gravação");
+
+        // A operação seguinte reconecta; o temporário incompleto pode ser apagado
+        fs.DeleteFile(path);
+        Assert.False(fs.FileExists(path));
+    }
+
+    /// <summary>
     /// Usuário só-SFTP (sem comandos): a detecção não trava nem se engana com a resposta vazia, e as cópias são
     /// conferidas pelo tamanho.
     /// </summary>

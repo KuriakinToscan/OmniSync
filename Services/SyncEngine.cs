@@ -72,6 +72,13 @@ public class SyncEngine : ISyncEngine
     private static readonly int HashParallelism = Math.Clamp(Environment.ProcessorCount, 1, 4);
 
     /// <summary>
+    /// Cópias de arquivos novos feitas ao mesmo tempo quando o destino é remoto (SFTP). Cada arquivo custa um número
+    /// fixo de idas e voltas ao servidor (criar, gravar, conferir, data, renomear); numa VPN com ~100 ms, isso dava
+    /// ~3 s por arquivo. Com 4 cópias simultâneas, esse custo se divide. Discos locais e SMB continuam uma a uma.
+    /// </summary>
+    internal const int RemoteCopyParallelism = 4;
+
+    /// <summary>
     /// Entrada indexada de um arquivo: caminho absoluto, tamanho e data de modificação lidos da própria enumeração.
     /// </summary>
     private readonly record struct FileEntry(string FullPath, long Length, DateTime LastWriteUtc);
@@ -368,6 +375,8 @@ public class SyncEngine : ISyncEngine
             var destFs = _resolveDest(normalizedDestDir);
             var trashDir = destFs.Combine(normalizedDestDir, PathHelper.TrashFolderName);
             var oldDir = destFs.Combine(normalizedDestDir, PathHelper.OldFolderName);
+            // O destino pode ter mudado por fora desde a execução anterior (a conexão SFTP é reaproveitada)
+            destFs.ForgetCachedState();
             destFs.CreateDirectory(normalizedDestDir);
 
             var result = new SyncResult();
@@ -417,9 +426,15 @@ public class SyncEngine : ISyncEngine
                 }
             }
 
+            // Protege o resultado nas cópias simultâneas (destino SFTP)
+            var resultGate = new object();
+
             void Fail(SyncItem item, string prefix, Exception ex)
             {
-                result.FailedItems.Add(item);
+                lock (resultGate)
+                {
+                    result.FailedItems.Add(item);
+                }
                 Update(item, $"{prefix}: {ErrorMessages.Translate(ex)}", processed: false, error: true);
                 logger?.Report($"[ERRO] {prefix} '{item.RelativePath}': {ErrorMessages.ForLog(ex)}");
             }
@@ -431,124 +446,190 @@ public class SyncEngine : ISyncEngine
             }
 
             RemoteAccessException? stopped = null;
-            foreach (var item in pending)
+
+            // Cópia de um arquivo novo; no destino SFTP, várias rodam ao mesmo tempo
+            async Task CopyNewItemAsync(SyncItem item)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (stopped != null)
+                try
                 {
-                    // O servidor ficou inacessível: o resto não é tentado (cada tentativa esperaria a conexão expirar)
-                    result.NotRun++;
-                    if (item.ActionType is SyncActionType.New or SyncActionType.Conflict)
+                    logger?.Report($"[NOVO] Copiando: {item.RelativePath}");
+                    await CopyNewFileAsync(destFs, item, OnBytesCopied, copyCheck, stats, cancellationToken);
+                    lock (resultGate)
                     {
-                        Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
+                        result.Copied++;
+                        result.BytesCopied += item.SourceSize;
                     }
-                    Update(item, "Não executado: servidor inacessível", processed: false, error: false);
-                    continue;
+                    Update(item, "Copiado", processed: true, error: false);
                 }
-                currentFileName = item.RelativePath;
-
-                switch (item.ActionType)
+                catch (OperationCanceledException)
                 {
-                    case SyncActionType.OrphanTrash:
-                        try
-                        {
-                            var destRel = destFs.GetRelativePath(normalizedDestDir, item.DestinationFullPath!);
-                            var movedTo = PathHelper.MoveIntoReservedFolder(destFs, item.DestinationFullPath!, trashDir, destRel);
-                            if (movedTo == null)
-                            {
-                                result.Skipped++;
-                                Update(item, "Pulado: o arquivo já não existia no destino", processed: true, error: false);
-                                logger?.Report($"[LIXO] Já não existia: {item.RelativePath}");
-                            }
-                            else
-                            {
-                                result.Trashed++;
-                                directoriesToPrune.Add(destFs.GetDirectoryName(item.DestinationFullPath!)!);
-                                Update(item, "Movido para lixo/", processed: true, error: false);
-                                logger?.Report($"[LIXO] Movido: {item.RelativePath}");
-                            }
-                        }
-                        catch (RemoteAccessException ex)
-                        {
-                            stopped = ex;
-                            Fail(item, "Erro ao mover para lixo/", ex);
-                        }
-                        catch (Exception ex)
-                        {
-                            Fail(item, "Erro ao mover para lixo/", ex);
-                        }
-                        break;
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (ex is RemoteAccessException remote) stopped = remote;
+                    Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
+                    Fail(item, "Erro ao copiar", ex);
+                }
+                Interlocked.Increment(ref processedFilesCount);
+                ReportProgress(force: true);
+            }
 
-                    case SyncActionType.Conflict:
-                        var resolution = item.Resolution;
-                        if (resolution == ConflictResolution.AskUser)
+            int copyParallelism = destFs.Kind == "sftp" ? RemoteCopyParallelism : 1;
+            var inFlight = new List<Task>();
+
+            // Espera as cópias em andamento (antes de ações que não podem correr junto e no fim)
+            async Task DrainAsync()
+            {
+                try
+                {
+                    await Task.WhenAll(inFlight);
+                }
+                finally
+                {
+                    inFlight.Clear();
+                }
+            }
+
+            try
+            {
+                foreach (var item in pending)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (item.ActionType == SyncActionType.New && stopped == null)
+                    {
+                        currentFileName = item.RelativePath;
+                        if (copyParallelism == 1)
                         {
-                            logger?.Report($"[CONFLITO] Solicitando decisão do usuário para: {item.RelativePath}");
-                            // Pausa o cronômetro enquanto aguarda a resposta humana para não distorcer velocidade/ETA
-                            overallStopwatch.Stop();
+                            await CopyNewItemAsync(item);
+                            continue;
+                        }
+                        while (inFlight.Count >= copyParallelism)
+                        {
+                            var done = await Task.WhenAny(inFlight);
+                            inFlight.Remove(done);
+                            await done;
+                        }
+                        // Task.Run: as operações SFTP de antes do envio (conferir, criar pastas) são síncronas e prenderiam o laço
+                        inFlight.Add(Task.Run(() => CopyNewItemAsync(item), CancellationToken.None));
+                        continue;
+                    }
+
+                    // Lixo/, substituição e decisões do usuário: uma de cada vez, depois das cópias em andamento
+                    await DrainAsync();
+                    if (stopped != null)
+                    {
+                        // O servidor ficou inacessível: o resto não é tentado (cada tentativa esperaria a conexão expirar)
+                        result.NotRun++;
+                        if (item.ActionType is SyncActionType.New or SyncActionType.Conflict)
+                        {
+                            Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
+                        }
+                        Update(item, "Não executado: servidor inacessível", processed: false, error: false);
+                        continue;
+                    }
+                    currentFileName = item.RelativePath;
+
+                    switch (item.ActionType)
+                    {
+                        case SyncActionType.OrphanTrash:
                             try
                             {
-                                resolution = await resolveConflictAsync(item);
+                                var destRel = destFs.GetRelativePath(normalizedDestDir, item.DestinationFullPath!);
+                                var movedTo = PathHelper.MoveIntoReservedFolder(destFs, item.DestinationFullPath!, trashDir, destRel);
+                                if (movedTo == null)
+                                {
+                                    result.Skipped++;
+                                    Update(item, "Pulado: o arquivo já não existia no destino", processed: true, error: false);
+                                    logger?.Report($"[LIXO] Já não existia: {item.RelativePath}");
+                                }
+                                else
+                                {
+                                    result.Trashed++;
+                                    directoriesToPrune.Add(destFs.GetDirectoryName(item.DestinationFullPath!)!);
+                                    Update(item, "Movido para lixo/", processed: true, error: false);
+                                    logger?.Report($"[LIXO] Movido: {item.RelativePath}");
+                                }
                             }
-                            finally
+                            catch (RemoteAccessException ex)
                             {
-                                overallStopwatch.Start();
+                                stopped = ex;
+                                Fail(item, "Erro ao mover para lixo/", ex);
                             }
-                        }
-
-                        if (resolution != ConflictResolution.Replace)
-                        {
-                            Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
-                            result.Ignored++;
-                            Update(item, "Ignorado (destino mantido)", processed: true, error: false, ConflictResolution.Ignore);
-                            logger?.Report($"[CONFLITO] Ignorado: {item.RelativePath}");
+                            catch (Exception ex)
+                            {
+                                Fail(item, "Erro ao mover para lixo/", ex);
+                            }
                             break;
-                        }
 
-                        try
-                        {
-                            logger?.Report($"[SUBSTITUIR] {item.RelativePath}");
-                            await ReplaceFileAsync(destFs, item, normalizedDestDir, oldDir, OnBytesCopied, copyCheck, stats, cancellationToken);
-                            result.Replaced++;
-                            result.BytesCopied += item.SourceSize;
-                            Update(item, "Substituído (anterior em old/)", processed: true, error: false, ConflictResolution.Replace);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw;
-                        }
-                        catch (Exception ex)
-                        {
-                            if (ex is RemoteAccessException remote) stopped = remote;
-                            Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
-                            Fail(item, "Erro ao substituir", ex);
-                        }
-                        break;
+                        case SyncActionType.Conflict:
+                            var resolution = item.Resolution;
+                            if (resolution == ConflictResolution.AskUser)
+                            {
+                                logger?.Report($"[CONFLITO] Solicitando decisão do usuário para: {item.RelativePath}");
+                                // Pausa o cronômetro enquanto aguarda a resposta humana para não distorcer velocidade/ETA
+                                overallStopwatch.Stop();
+                                try
+                                {
+                                    resolution = await resolveConflictAsync(item);
+                                }
+                                finally
+                                {
+                                    overallStopwatch.Start();
+                                }
+                            }
 
-                    case SyncActionType.New:
-                        try
-                        {
-                            logger?.Report($"[NOVO] Copiando: {item.RelativePath}");
-                            await CopyNewFileAsync(destFs, item, OnBytesCopied, copyCheck, stats, cancellationToken);
-                            result.Copied++;
-                            result.BytesCopied += item.SourceSize;
-                            Update(item, "Copiado", processed: true, error: false);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw;
-                        }
-                        catch (Exception ex)
-                        {
-                            if (ex is RemoteAccessException remote) stopped = remote;
-                            Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
-                            Fail(item, "Erro ao copiar", ex);
-                        }
-                        break;
+                            if (resolution != ConflictResolution.Replace)
+                            {
+                                Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
+                                result.Ignored++;
+                                Update(item, "Ignorado (destino mantido)", processed: true, error: false, ConflictResolution.Ignore);
+                                logger?.Report($"[CONFLITO] Ignorado: {item.RelativePath}");
+                                break;
+                            }
+
+                            try
+                            {
+                                logger?.Report($"[SUBSTITUIR] {item.RelativePath}");
+                                await ReplaceFileAsync(destFs, item, normalizedDestDir, oldDir, OnBytesCopied, copyCheck, stats, cancellationToken);
+                                result.Replaced++;
+                                result.BytesCopied += item.SourceSize;
+                                Update(item, "Substituído (anterior em old/)", processed: true, error: false, ConflictResolution.Replace);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                if (ex is RemoteAccessException remote) stopped = remote;
+                                Interlocked.Add(ref totalBytesToCopy, -item.SourceSize);
+                                Fail(item, "Erro ao substituir", ex);
+                            }
+                            break;
+
+                    }
+
+                    Interlocked.Increment(ref processedFilesCount);
+                    ReportProgress(force: true);
                 }
-
-                processedFilesCount++;
-                ReportProgress(force: true);
+                await DrainAsync();
+            }
+            finally
+            {
+                // Cancelamento com cópias em andamento: espera todas terminarem (cada uma apaga o seu temporário)
+                // antes de devolver o controle
+                if (inFlight.Count > 0)
+                {
+                    try
+                    {
+                        await Task.WhenAll(inFlight);
+                    }
+                    catch (Exception)
+                    {
+                        // O cancelamento já está a caminho do chamador
+                    }
+                }
             }
 
             if (stopped != null)
@@ -1044,7 +1125,7 @@ public class SyncEngine : ISyncEngine
                         {
                             throw new CopyVerificationException();
                         }
-                        stats.Hash++;
+                        Interlocked.Increment(ref stats.Hash);
                     }
                     else
                     {
@@ -1055,12 +1136,12 @@ public class SyncEngine : ISyncEngine
                                 $"A cópia gravada no servidor tem {(written is { } w ? w.Length.ToString("N0") : "0")} bytes, e a origem tem {expectedLength:N0}. " +
                                 "O arquivo do destino não foi alterado; verifique o espaço no servidor ou a conexão.");
                         }
-                        stats.Size++;
+                        Interlocked.Increment(ref stats.Size);
                     }
                 }
                 else if (readBack)
                 {
-                    stats.Hash++;
+                    Interlocked.Increment(ref stats.Hash);
                 }
 
                 // Preserva a data/hora de modificação original para futuras comparações diferenciais
