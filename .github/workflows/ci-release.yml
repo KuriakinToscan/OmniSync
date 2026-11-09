@@ -6,20 +6,27 @@ on:
     tags: [ "v*" ]
   pull_request:
     branches: [ "main", "master" ]
+  # Disparo manual (aba Actions): compila, testa e guarda os executáveis por 3 dias, para teste
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
     strategy:
+      # Uma falha num sistema não cancela o outro: a main sempre mostra o resultado dos dois
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configurar .NET 10 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -118,20 +125,80 @@ jobs:
           set -e
           test "$code" -eq 3
 
-      # Artefatos só em push para main/tag (pull requests só compilam e testam), guardados por 3 dias
-      # para não esgotar a cota de armazenamento do Actions
+      # Artefatos só em disparo manual (3 dias, para teste) e em tag de versão (1 dia, só para o job
+      # de release os pegar). Push na main e pull request só compilam e testam, para não esgotar a
+      # cota de armazenamento do Actions. O arquivo permanente fica na release, que não conta na cota.
       - name: Upload de artefato Windows
-        if: matrix.os == 'windows-latest' && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        uses: actions/upload-artifact@v6
         with:
           name: OmniSync-win-x64
           path: publish/win-x64/OmniSync.exe
-          retention-days: 3
+          retention-days: ${{ github.event_name == 'workflow_dispatch' && 3 || 1 }}
 
       - name: Upload de artefato Linux
-        if: matrix.os == 'ubuntu-latest' && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        uses: actions/upload-artifact@v6
         with:
           name: OmniSync-linux-x64
           path: publish/linux-x64/OmniSync
-          retention-days: 3
+          retention-days: ${{ github.event_name == 'workflow_dispatch' && 3 || 1 }}
+
+  # Release no GitHub, só em tag vX.Y.Z e só depois de Windows e Linux verdes
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v5
+
+      - name: Conferir a tag com a versão do projeto e ler as notas do CHANGELOG
+        id: versao
+        run: |
+          versao="$(grep -oP '(?<=<Version>)[^<]+' OmniSync.csproj)"
+          if [ "${GITHUB_REF_NAME}" != "v${versao}" ]; then
+            echo "::error::A tag ${GITHUB_REF_NAME} não confere com <Version>${versao}</Version> do OmniSync.csproj"
+            exit 1
+          fi
+          # Seção "## X.Y.Z — data" do CHANGELOG, até a próxima seção "## "
+          awk -v v="${versao}" '
+            /^## / { dentro = (index($0, "## " v " ") == 1) ; next }
+            dentro { print }
+          ' CHANGELOG.md > notas.md
+          if ! grep -q '[^[:space:]]' notas.md; then
+            echo "::error::CHANGELOG.md não tem a seção '## ${versao} — data'"
+            exit 1
+          fi
+          echo "versao=${versao}" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar os executáveis testados
+        uses: actions/download-artifact@v7
+        with:
+          path: artefatos
+
+      - name: Montar os arquivos da release com SHA-256
+        env:
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          mkdir release
+          cp artefatos/OmniSync-win-x64/OmniSync.exe "release/OmniSync-${VERSAO}-win-x64.exe"
+          cp artefatos/OmniSync-linux-x64/OmniSync "release/OmniSync-${VERSAO}-linux-x64"
+          chmod +x "release/OmniSync-${VERSAO}-linux-x64"
+          (cd release && sha256sum -- * > SHA256SUMS.txt)
+          cat release/SHA256SUMS.txt
+          printf '\n---\nConferência no Windows (PowerShell): `Get-FileHash .\\OmniSync-%s-win-x64.exe` e compare com `SHA256SUMS.txt`.\n' "${VERSAO}" >> notas.md
+
+      - name: Publicar a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "OmniSync ${VERSAO}" \
+            --notes-file notas.md \
+            --verify-tag
