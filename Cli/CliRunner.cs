@@ -71,6 +71,9 @@ public sealed class CliRunner
                 case CliAction.Help:
                     _output.WriteLine(CliCommand.HelpText);
                     return CliExitCode.Success;
+                case CliAction.Version:
+                    _output.WriteLine($"OmniSync {AppInstaller.CurrentVersion}");
+                    return CliExitCode.Success;
                 case CliAction.List:
                     return ListTasks();
                 default:

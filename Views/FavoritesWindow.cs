@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -26,16 +25,16 @@ public sealed class FavoritesWindow : Window
     private readonly bool? _forSource;
     private readonly ObservableCollection<RemoteFavorite> _favorites;
     private readonly ListBox _list;
-    private readonly TextBox _name = new() { Watermark = "Ex.: NAS do setor" };
-    private readonly TextBox _host = new() { Watermark = "Ex.: nas.local ou 10.0.0.5" };
+    private readonly TextBox _name = new() { PlaceholderText = "Ex.: NAS do setor" };
+    private readonly TextBox _host = new() { PlaceholderText = "Ex.: nas.local ou 10.0.0.5" };
     private readonly TextBox _port = new() { Text = "22", Width = 90, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly TextBox _user = new() { Watermark = "Usuário no servidor" };
-    private readonly TextBox _folder = new() { Watermark = "Ex.: /volume1/backup ou /home/usuario/dados" };
+    private readonly TextBox _user = new() { PlaceholderText = "Usuário no servidor" };
+    private readonly TextBox _folder = new() { PlaceholderText = "Ex.: /volume1/backup ou /home/usuario/dados" };
     private readonly RadioButton _usePassword = new() { Content = "Senha", GroupName = "auth", IsChecked = true };
     private readonly RadioButton _useKey = new() { Content = "Arquivo de chave", GroupName = "auth" };
     private readonly TextBox _password = new() { PasswordChar = '•' };
-    private readonly TextBox _keyFile = new() { Watermark = "Ex.: C:\\Users\\voce\\.ssh\\id_ed25519" };
-    private readonly TextBox _passphrase = new() { PasswordChar = '•', Watermark = "Frase-senha da chave (se houver)" };
+    private readonly TextBox _keyFile = new() { PlaceholderText = "Ex.: C:\\Users\\voce\\.ssh\\id_ed25519" };
+    private readonly TextBox _passphrase = new() { PasswordChar = '•', PlaceholderText = "Frase-senha da chave (se houver)" };
     private readonly TextBlock _secretNote = new() { TextWrapping = TextWrapping.Wrap, Classes = { "caption" } };
     private readonly TextBlock _hostKeyText = new() { TextWrapping = TextWrapping.Wrap, Classes = { "caption" } };
     private readonly CheckBox _verifyByReading = new() { Content = "Conferir cada cópia relendo o arquivo pela rede (dobra o tráfego)" };
@@ -223,7 +222,7 @@ public sealed class FavoritesWindow : Window
     {
         bool hasStored = TryBuildAddress(out var address, out _) && RemoteConnections.HasStoredSecret(address);
         var store = CredentialStore.Current;
-        _password.Watermark = hasStored ? "Senha guardada (deixe em branco para manter)" : "Senha";
+        _password.PlaceholderText = hasStored ? "Senha guardada (deixe em branco para manter)" : "Senha";
         _secretNote.Text = !store.IsAvailable
             ? "Não há cofre de senhas disponível: a senha é pedida ao conectar e vale só enquanto o OmniSync estiver aberto."
             : hasStored

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using OmniSync.Cli;
 using OmniSync.Services;
+using OmniSync.Services.Remote;
 
 namespace OmniSync;
 
@@ -85,6 +86,7 @@ public sealed class Program
 
             var runner = new CliRunner(new SyncEngine(), output, AppPaths.SettingsFile);
             var code = runner.RunAsync(command!, cts.Token).GetAwaiter().GetResult();
+            RemoteConnections.DisconnectAll();
             FileLogService.Write($"[CLI] Código de saída: {(int)code} ({code})");
             if (runner.Notification != null)
             {

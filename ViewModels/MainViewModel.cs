@@ -557,6 +557,11 @@ public partial class MainViewModel : ViewModelBase
     public bool CanEditConflicts => !IsBusy && ConflictCount > 0;
 
     /// <summary>
+    /// Versão do executável exibida no cabeçalho (ex.: "v2.0.2").
+    /// </summary>
+    public string AppVersionText { get; } = "v" + AppInstaller.CurrentVersion;
+
+    /// <summary>
     /// Indica se é possível trocar de tarefa, criar ou remover tarefas.
     /// </summary>
     public bool CanManageProfiles => !IsBusy;
@@ -1144,17 +1149,6 @@ public partial class MainViewModel : ViewModelBase
     // ------------------------------------------------------------------
     // Origem e destino
     // ------------------------------------------------------------------
-
-    /// <summary>
-    /// Calcula o caminho efetivo do diretório de destino.
-    /// Quando <see cref="UseSourceFolderNameInDestination"/> está ativo (ou quando o destino é a raiz de um disco, ex.: <c>G:\</c>),
-    /// anexa automaticamente o nome da pasta de origem caso ainda não conste no final do caminho de destino.
-    /// </summary>
-    /// <param name="sourcePath">Caminho da pasta de Origem.</param>
-    /// <param name="destPath">Caminho da pasta de Destino informada.</param>
-    /// <returns>Caminho de destino resolvido com segurança.</returns>
-    public string ResolveEffectiveDestinationPath(string sourcePath, string destPath) =>
-        PathHelper.ResolveEffectiveDestination(sourcePath, destPath, UseSourceFolderNameInDestination);
 
     /// <summary>
     /// Abre o seletor de pastas para escolha do diretório de Origem.

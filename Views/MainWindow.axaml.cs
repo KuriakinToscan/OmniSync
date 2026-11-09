@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -13,6 +12,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using OmniSync.Models;
 using OmniSync.Services;
+using OmniSync.Services.Remote;
 using OmniSync.ViewModels;
 
 namespace OmniSync.Views;
@@ -200,6 +200,15 @@ public partial class MainWindow : Window
         {
             vm.SaveSettings();
         }
+    }
+
+    /// <summary>
+    /// Fecha as conexões SFTP abertas quando a janela é fechada.
+    /// </summary>
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        RemoteConnections.DisconnectAll();
     }
 
     /// <summary>

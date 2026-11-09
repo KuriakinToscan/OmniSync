@@ -18,10 +18,11 @@ Este documento descreve a arquitetura de software, os algoritmos de sincronizaç
 
 | Componente | Tecnologia / Versão | Finalidade |
 | :--- | :--- | :--- |
-| **Runtime & Linguagem** | .NET 10.0 / C# 13 | Performance nativa multiplataforma, `FileStream` assíncrono e `SHA256` acelerado por hardware. |
+| **Runtime & Linguagem** | .NET 10.0 / C# 14 | Performance nativa multiplataforma, `FileStream` assíncrono e `SHA256` acelerado por hardware. |
 | **Interface Gráfica (UI)** | Avalonia UI `12.1.3` | Renderização Skia multiplataforma idêntica no Windows (Win32) e Linux (X11/Wayland). |
 | **Controles Tabulares** | `Avalonia.Controls.DataGrid` `12.1.2` | Grade virtualizada para exibição de dezenas de milhares de arquivos. |
 | **Padrão Arquitetural** | `CommunityToolkit.Mvvm` `8.4.2` | Geradores de código (`[ObservableProperty]`, `[RelayCommand]`) sem overhead de reflexão. |
+| **SFTP** | `SSH.NET` `2026.0.0` (MIT) | Conexão SSH/SFTP, chave do servidor e comandos para o SHA-256 no servidor. |
 | **Testes Automatizados** | `xUnit` `2.9.3` + Modo `--self-test` | Testes de integração de sistema de arquivos e teste E2E da interface gráfica. |
 | **Ícones** | Geometrias vetoriais próprias (`Styles/Icons.axaml`) | Independem de fontes de emoji, ausentes em várias distribuições Linux. |
 
@@ -33,36 +34,54 @@ O projeto segue separação estrita de responsabilidades segundo o padrão **Mod
 
 ```mermaid
 flowchart TD
-    subgraph Views["Camada de Visão (Avalonia XAML)"]
-        MW["MainWindow.axaml(.cs)"]
-        CDW["ConflictDialogWindow.axaml(.cs)"]
+    subgraph Entrada["Pontos de entrada (Program.cs)"]
+        GUI["Interface (Avalonia)"]
+        CLI["Linha de comando<br/>Cli/CliCommand + CliRunner"]
+        NOTE["Aviso agendado<br/>NotificationWindow"]
     end
 
-    subgraph ViewModels["Camada de Apresentação (CommunityToolkit.Mvvm)"]
-        MVM["MainViewModel"]
-        CDVM["ConflictDialogViewModel"]
+    subgraph Views["Views"]
+        MW["MainWindow"]
+        DLG["ConfirmSync / ConflictDialog / Restore / Log<br/>Favorites / RemoteDialogs / Install / MessageDialog"]
     end
 
-    subgraph Services["Camada de Domínio / Serviços"]
-        ISE["ISyncEngine"]
-        SE["SyncEngine"]
+    subgraph ViewModels["ViewModels (CommunityToolkit.Mvvm)"]
+        MVM["MainViewModel<br/>(+ .Schedule, .Remote)"]
+        OVM["ConfirmSync / ConflictDialog / Restore<br/>ProfileItem / FolderTree / DecisionMemory"]
     end
 
-    subgraph Models["Camada de Modelos"]
-        SI["SyncItem"]
-        SPR["SyncProgressReport"]
-        SAT["SyncActionType / ConflictResolution"]
+    subgraph Services["Services (sem Avalonia)"]
+        SE["ISyncEngine / SyncEngine"]
+        RS["RestoreService"]
+        ST["SettingsService / RunHistory / TaskLock"]
+        SCH["Scheduling: Windows / systemd<br/>ScheduleHealth / SnoozeService"]
+        REM["Remote: RemoteConnections / CredentialStore"]
     end
 
-    MW -->|DataContext / Commands| MVM
-    MW -->|ShowDialog| CDW
-    CDW -->|DataContext| CDVM
-    MVM -->|Injeção de Dependência| ISE
-    SE -.->|Implementa| ISE
-    MVM -->|Mantém coleção| SI
-    SE -->|Produz| SI
-    SE -->|Reporta via IProgress| SPR
-    SI -->|Usa| SAT
+    subgraph FS["Services/FileSystems"]
+        IFS["IFileSystem"]
+        LFS["LocalFileSystem (disco, SMB)"]
+        SFS["SftpFileSystem + SftpUploadStream"]
+    end
+
+    GUI --> MW
+    MW -->|DataContext| MVM
+    MW --> DLG
+    DLG --> OVM
+    MVM --> SE
+    MVM --> RS
+    MVM --> ST
+    MVM --> SCH
+    MVM --> REM
+    CLI --> SE
+    CLI --> ST
+    CLI --> SCH
+    CLI --> NOTE
+    SE --> IFS
+    RS --> IFS
+    IFS --> LFS
+    IFS --> SFS
+    SFS --> REM
 ```
 
 ### Desacoplamento entre View e ViewModel
@@ -135,6 +154,8 @@ Antes da execução, o `MainViewModel` apresenta o resumo do plano (`SyncPlanSum
 
 Toda a execução ocorre em `Task.Run`. Itens idênticos ou já processados são pulados.
 
+Os itens são processados na ordem do plano. No destino local ou SMB, um de cada vez; no destino SFTP, até `SyncEngine.RemoteCopyParallelism` (4) cópias de arquivos novos correm ao mesmo tempo, e cada ação que não pode correr junto (`lixo/`, substituição, pergunta ao usuário) espera as cópias em andamento terminarem (seção 4.12). Por tipo de item:
+
 1. **`OrphanTrash`**: `PathHelper.MoveIntoReservedFolder` move para `<Destino>/lixo/<relPath>` sem sobrescrever (sufixo de data em colisão). Se o arquivo já não existe, o item é contado como **pulado**. Ao final, pastas que ficaram vazias são removidas com exclusão **não recursiva**.
 2. **`Conflict`**: se `Resolution == AskUser`, o cronômetro de velocidade/ETA é pausado e `resolveConflictAsync` é chamado. Em `Ignore`, os bytes do item saem do total previsto. Em `Replace`, a ordem é:
    1. copiar a nova versão para `<arquivo>.omnisync-tmp`;
@@ -144,7 +165,7 @@ Toda a execução ocorre em `Task.Run`. Itens idênticos ou já processados são
    Se (2) ou (3) falhar, o temporário é removido e a versão anterior é devolvida ao lugar.
 3. **`New`**: se já existir arquivo no destino (surgiu após a análise, ou difere só na caixa), o item **falha** sem sobrescrever. Caso contrário, copia para temporário e renomeia com `overwrite: false`.
 
-A cópia (`CopyToTempWithRetryAsync`) usa buffer de 2 MB do `ArrayPool`, `FileStream` sem buffer interno (`BufferSize = 0`), `SequentialScan`, pré-alocação (`PreallocationSize`) e verificação do total de bytes contra o tamanho da origem. A data de modificação é aplicada ao temporário antes da renomeação.
+A cópia (`CopyToTempWithRetryAsync`) usa buffer de 2 MB do `ArrayPool` e confere o total de bytes contra o tamanho da origem. Os fluxos vêm de `IFileSystem.OpenRead`/`CreateNew`: no `LocalFileSystem`, `FileStream` sem buffer interno (`BufferSize = 0`), `SequentialScan` e pré-alocação (`PreallocationSize`); no SFTP, `SftpUploadStream` (seção 4.12). A data de modificação é aplicada ao temporário antes da renomeação.
 
 O método retorna `SyncResult` (copiados, substituídos, movidos, ignorados, pulados, falhas, bytes e duração). Itens com falha ficam com `HasError = true` e `IsProcessed = false`, e podem ser reprocessados.
 
@@ -174,35 +195,40 @@ Limitação: a releitura é atendida pelo cache de disco do sistema operacional;
 
 A forma de conferir vem de `IFileSystem.CopyCheck`, lida uma vez por execução: `ReadBack` (local e SMB, descrito acima), `ServerHash` (o servidor calcula o SHA-256 do temporário já fechado, por `IFileSystem.ComputeSha256OnServer`, comparado com o hash dos bytes enviados) e `Size` (só o tamanho gravado, via `GetFile`). Em `ServerHash`, resposta `null` do servidor rebaixa aquela cópia para `Size`. `SyncResult.VerifiedByHash`/`VerifiedBySize` contam cada tipo; `VerifiedBySize` vai para o log, para a tela de resultado e para o histórico (`RunRecord.VerifiedBySize`).
 
-### 4.4. Proteção contra sincronização acidental
-- **Subpasta por nome da origem** (`ResolveEffectiveDestinationPath`): `E:\Fotos` + `G:\` → `G:\Fotos`.
+### 4.5. Proteção contra sincronização acidental
+- **Subpasta por nome da origem** (`PathHelper.ResolveEffectiveDestination`): `E:\Fotos` + `G:\` → `G:\Fotos`.
 - **Pastas aninhadas bloqueadas**: destino dentro da origem ou origem dentro do destino lançam `InvalidOperationException`.
 - **Plano invalidado**: alterar origem, destino, SHA-256, tolerância de horário de verão ou exclusões após a análise descarta o plano.
 - **Confirmação** com alerta de remoção em massa (seção 3.2).
 
-### 4.5. Retentativa
+### 4.6. Retentativa
 Até 3 tentativas com espera de 1 s × tentativa, **apenas para `IOException` transitória**. `FileNotFoundException`, `DirectoryNotFoundException`, `PathTooLongException`, `DriveNotFoundException` e `UnauthorizedAccessException` falham na hora.
 
-### 4.6. Concorrência, UI e progresso
+### 4.7. Concorrência, UI e progresso
 - **Status e log em lote**: `UiBatchQueue<T>` acumula em `ConcurrentQueue` e entrega à UI a cada 150 ms. Antes, cada arquivo exigia um `Dispatcher.InvokeAsync(...).GetResult()` síncrono, o principal gargalo em árvores grandes.
 - **Throttling de progresso**: no máximo 1 relatório a cada 80 ms.
 - **ETA**: `Math.Clamp(secondsRemaining, 0, 86400 × 30)` antes de `TimeSpan.FromSeconds`.
 - **Troca atômica de `FilteredItems`** (`IReadOnlyList<SyncItem>`), com filtro por categoria e busca por caminho.
 
-### 4.7. Restauração (`RestoreService`)
+### 4.8. Restauração (`RestoreService`)
 - Atua apenas em `<Destino>/lixo/` e recusa entradas fora dele.
 - Restaura somente os arquivos selecionados pelo usuário.
 - Nunca sobrescreve nem exclui: se o local original estiver ocupado, o arquivo permanece em `lixo/`.
 - Remove o sufixo de desambiguação (`_yyyyMMdd_HHmmss[_n]`) quando o nome original está livre.
 - Remove apenas pastas vazias de `lixo/`.
 
-### 4.8. Persistência e diagnóstico
+### 4.9. Persistência e diagnóstico
 Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou `~/.local/share/OmniSync` (Linux).
 - `settings.json`: tarefas salvas (`Profiles`) e tarefa ativa (`ActiveProfileId`), com gravação atômica. O formato 1.1 (uma tarefa em campos soltos) é migrado na leitura por `SettingsService.Normalize`, que também corrige ids repetidos, nomes vazios, tarefa ativa inexistente e destinos com a subpasta da origem já gravada.
 - `logs/omnisync-AAAAMMDD.log`: log completo de todas as operações.
+- `history/<id>.json`: histórico de execuções por tarefa (seção 4.11).
+- `locks/<id>.lock`: trava de execução por tarefa (seção 4.11).
+- `snooze/<id>.txt`: adiamento pendente do aviso agendado (seção 4.11).
 - `crash.log` e `selftest.log`.
 
-### 4.9. Modo de linha de comando (`Cli/`)
+O formato de cada arquivo está em [REFERENCIA.md](REFERENCIA.md).
+
+### 4.10. Modo de linha de comando (`Cli/`)
 `Program.Main` desvia para `RunCli` quando há qualquer argumento além de `--self-test`, antes de iniciar o Avalonia (nenhuma janela é criada).
 - `CliCommand`: interpreta `--listar`, `--analisar`, `--sincronizar`, `--ajuda` (com sinônimos em inglês) e as opções `--conflitos`, `--relatorio`, `--detalhado`; argumento desconhecido gera erro e código 3.
 - `CliRunner`: carrega `settings.json`, encontra a tarefa (nome sem caixa nem acentos, ou `Id`), resolve o destino efetivo com `PathHelper.ResolveEffectiveDestination`, recusa pares inválidos (`DescribePairProblem`), analisa com as opções da tarefa e aplica a política de conflitos (`ApplyConflictPolicy`: `Ignore` por padrão; `Replace` só com `origem-mais-nova` e `ConflictDirection.SourceNewer`). A proteção de remoção em massa (`SyncSafety.IsMassOrphan`, o mesmo critério da confirmação da interface) aborta antes de `ExecuteSyncAsync`. Ao fim, relê `settings.json` e grava só a última execução da tarefa.
@@ -210,18 +236,19 @@ Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou
 - Códigos de saída: `CliExitCode` (0 sem falhas, 1 falhas, 2 remoção em massa, 3 entrada inválida, 4 interrompido, 5 erro inesperado, 6 tarefa já em execução, 7 conexão remota pendente de você, 8 servidor remoto inacessível). `RemoteAccessException` vira 7 quando `RequiresUser` e 8 nos demais casos.
 - `--agendado` (`CliCommand.Scheduled`): grava o histórico como agendado e preenche `CliRunner.Notification` quando há o que avisar. `Program` então inicia o Avalonia só com a `NotificationWindow` (`App.PendingNotification`), sem a janela principal.
 
-### 4.10. Agendamento, histórico e instalação
+### 4.11. Agendamento, histórico e instalação
 - **Modelo**: `SyncSchedule` (em `SyncProfile.Schedule`, dentro do `settings.json`): ligado, modo (`Sync`/`AnalyzeAndNotify`), frequência (`Daily`/`Weekly`/`AtLogon`), hora, dias, política de conflitos e `RegisteredExecutable`. `BuildArguments` usa o **id** da tarefa (renomear não quebra o agendamento).
 - **Agendador do sistema** (`Services/Scheduling`): `ISystemScheduler` com `WindowsTaskScheduler` e `SystemdTimerScheduler`, escolhido em `SystemScheduler.Current`.
   - Windows: `schtasks /Create /TN \OmniSync\<id> /XML <arquivo> /F`, com XML do esquema 1.2 em UTF-16 com BOM. `InteractiveToken` + `LeastPrivilege` (sem senha nem elevação), `DisallowStartIfOnBatteries=false`, `StopIfGoingOnBatteries=false`, `StartWhenAvailable=true`, `MultipleInstancesPolicy=IgnoreNew`, limite de 72 h. Logon com `Delay=PT5M`. Saída do `schtasks` lida na página OEM.
   - Linux: `~/.config/systemd/user/omnisync-<id>.service` (oneshot) e `.timer` (`OnCalendar`, `Persistent=true`; logon como `OnStartupSec=5min`), com `daemon-reload` e `enable --now`.
   - `ScheduleHealth.Check`: executável registrado ausente ou entrada ausente no agendador. A interface verifica ao abrir e oferece registrar de novo.
 - **Histórico** (`RunHistory`): `history/<id>.json` na pasta de dados, 30 registros por tarefa, gravação atômica. Fica fora do `settings.json` porque a interface aberta regrava esse arquivo inteiro. A interface grava as execuções manuais e, ao ser ativada, traz para as tarefas as execuções feitas fora dela (`RefreshRunsFromHistory`).
+- **Adiar** (`SnoozeService`, botão do `NotificationWindow`): avisos de pendência, falhas ou servidor inacessível (`CliNotification.Snooze != null`) oferecem 15 min, 1 h, 4 h ou um horário no relógio (`ClockTimePicker`). O serviço registra um disparo único com os mesmos argumentos da execução que avisou: no Windows, item `\OmniSync\<id>-adiado-<AAAAMMDD-HHMMSS>` com gatilho `TimeTrigger` único (`BuildOnceXml`); no Linux, `systemd-run --user --on-calendar` (unit transitória). O estado fica em `snooze/<id>.txt` (nome do disparo e horário previsto): adiar de novo apaga o anterior, e `OnScheduledRun` cancela o pendente quando chega uma execução do agendamento normal antes do horário (folga `DueTolerance` de 1 min). Sem aviso a dar, a execução adiada termina em silêncio.
 - **Trava** (`TaskLock`): `locks/<id>.lock` aberto com `FileShare.None` e `DeleteOnClose`. A sincronização pela interface e pela linha de comando a obtêm; o sistema a libera mesmo se o processo morrer.
 - **Instalação** (`AppInstaller`, `ShortcutService`, `InstallWindow`): cópia para `%LOCALAPPDATA%\Programs\OmniSync` (temporário + `File.Move` com substituição), comparação por SHA-256 para detectar outra versão, atalhos `.lnk` via `WScript.Shell` (COM tardio, sem dependência de compilação) ou `.desktop` no Linux (com `omnisync.png` gravado ao lado do executável). A oferta aparece ao abrir fora da pasta fixa e ao ligar um agendamento sem instalação.
 
 
-### 4.11. Camada de arquivos e SFTP (`Services/FileSystems`, `Services/Remote`)
+### 4.12. Camada de arquivos e SFTP (`Services/FileSystems`, `Services/Remote`)
 - **`IFileSystem`**: todo acesso a arquivos do motor, da restauração e das pastas `lixo/`/`old/` passa por ela. `LocalFileSystem` repete as chamadas do `System.IO` (disco e SMB). `FileSystemProvider.For(caminho)` escolhe `SftpFileSystem` para `sftp://` e o local para o resto. O motor resolve a origem e o destino a cada análise/execução; os testes injetam sistemas fixos (ex.: `MemoryFileSystem`).
 - **Caminhos**: os completos estão na notação do próprio sistema (no SFTP, o endereço canônico de `RemoteAddress`: servidor em minúsculas, porta só se ≠ 22, sem barra final). Os relativos (`SyncItem.RelativePath`) usam sempre `Path.DirectorySeparatorChar`, para comparar lados de tipos diferentes. `PathHelper.NormalizeDirectory`/`IsSubPathOf`/`ResolveEffectiveDestination` tratam endereços remotos (comparação ordinal, `/`).
 - **`SftpFileSystem`** (SSH.NET 2026.0.0, MIT): converte `SftpPathNotFoundException` → `FileNotFound`/`DirectoryNotFound`, `SftpPermissionDenied` → `UnauthorizedAccess`, queda/timeout → `IOException` (repetida pelo motor), e reconecta na operação seguinte. Leituras (`ListDirectory`, atributos) repetem uma vez após `SshConnectionException`/`SocketException`, para uma queda curta não marcar pasta como ilegível. Se a reconexão falhar, `EnsureConnected` lança `RemoteAccessException` (`Unreachable`, ou `AuthenticationFailed` se a senha passou a ser recusada). `CreateNew` cria com O_EXCL (falha se existir); `MoveFile` confere o alvo antes do `rename` (nunca sobrescreve). O fluxo de gravação propaga a falha do fechamento, para um temporário incompleto nunca ser renomeado. Atalhos e arquivos especiais são ignorados na listagem.
@@ -248,7 +275,27 @@ Pasta de dados por usuário (`AppPaths`): `%LOCALAPPDATA%\OmniSync` (Windows) ou
 8. **[`Tests/CliTests.cs`](../Tests/CliTests.cs)**: argumentos (válidos e inválidos), busca da tarefa sem acentos e por id, política de conflitos (destino mais novo nunca é substituído), sincronização de ponta a ponta com CSV e registro da última execução, análise sem alterações, aborto por remoção em massa, tarefa inexistente e origem ausente.
 9. **[`Tests/ScheduleTests.cs`](../Tests/ScheduleTests.cs)**: próxima execução e descrição do agendamento, argumentos reinterpretados pela CLI, persistência no `settings.json`, XML do Agendador de Tarefas (gatilhos, bateria, privilégio, ação), units do systemd (aspas e `%`), integração real com o `schtasks` (só no Windows), saúde do agendamento, histórico (limite e arquivo corrompido), trava exclusiva, execução agendada (histórico, aviso, código 6, remoção em massa), estado e cópia da instalação e entrada `.desktop`; adiamento do aviso ("Adiar"): argumentos repetidos, disparo único no XML do Agendador e no `systemd-run`, substituição e cancelamento.
 10. **[`Tests/ClockPickerTests.cs`](../Tests/ClockPickerTests.cs)**: geometria do mostrador de relógio (ângulo, anel externo 00–11 e interno 12–23, minutos arredondados no clique e exatos no arraste), próxima ocorrência do horário escolhido no "Adiar" (hoje ou amanhã, virada do mês) e disparo único registrado nesse horário.
-11. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
+11. **[`Tests/FileSystemLayerTests.cs`](../Tests/FileSystemLayerTests.cs)**: motor e restauração sobre `MemoryFileSystem`, sem disco.
+12. **[`Tests/PathProbeTests.cs`](../Tests/PathProbeTests.cs)**: tempo-limite de 5 s ao abrir pastas de rede sem resposta.
+13. **[`Tests/RemoteAddressTests.cs`](../Tests/RemoteAddressTests.cs)**: interpretação e forma canônica de `sftp://`, caminhos remotos e destino efetivo remoto.
+14. **[`Tests/CopyCheckAndRecoveryTests.cs`](../Tests/CopyCheckAndRecoveryTests.cs)**: conferência por servidor, tamanho e releitura; temporários de execução interrompida; parada com servidor inacessível; montagem e leitura do comando de SHA-256.
+15. **[`Tests/SftpIntegrationTests.cs`](../Tests/SftpIntegrationTests.cs)** e **[`Tests/SftpLatencyTests.cs`](../Tests/SftpLatencyTests.cs)**: ponta a ponta contra um servidor SFTP real; o segundo passa pelo `LatencyProxy` (50 ms em cada sentido, queda sob comando). Sem servidor configurado, são ignorados.
+16. **Autoteste E2E (`--self-test`)**: abre a janela real, executa análise e sincronização pelo `MainViewModel`, verifica o resultado em disco e grava `SELF_TEST_OK` ou `SELF_TEST_FAIL` em `selftest.log` (pasta de dados).
+
+### Testes SFTP na máquina de desenvolvimento
+Precisam de um servidor OpenSSH acessível (no Linux, o próprio `sshd` local; no Windows, o recurso opcional "Servidor OpenSSH"). Defina as variáveis e rode `dotnet test`:
+
+```bash
+export OMNISYNC_SFTP_TEST="sftp://usuario@127.0.0.1:22/home/usuario/omnisync-teste"
+export OMNISYNC_SFTP_PASSWORD="senha-do-usuario"
+# Opcional: usuário com ForceCommand internal-sftp, para a conferência pelo tamanho
+export OMNISYNC_SFTP_ONLY_TEST="sftp://usuariosftp@127.0.0.1:22/home/usuariosftp"
+# Opcional: falhar (em vez de ignorar) quando o servidor não responder
+export OMNISYNC_SFTP_REQUIRED=1
+dotnet test Tests/OmniSync.Tests.csproj
+```
+
+Cada teste cria uma subpasta `omnisync-teste-<aleatório>` dentro da pasta indicada e a apaga ao fim.
 
 ---
 
@@ -267,4 +314,15 @@ dotnet publish OmniSync.csproj -c Release -r linux-x64 --self-contained true -p:
 ```
 
 ### Integração Contínua (GitHub Actions)
-O arquivo [`.github/workflows/ci-release.yml`](../.github/workflows/ci-release.yml) está configurado para compilar, testar e gerar automaticamente os artefatos `OmniSync-win-x64` e `OmniSync-linux-x64` a cada *push* ou *pull request* nas branches `main`/`master`. Depois do autoteste, o executável publicado também é testado pela linha de comando: `--ajuda`, tarefa inexistente (código 3) e uma sincronização real (Windows), conferindo o código de saída e o arquivo copiado.
+O arquivo [`.github/workflows/ci-release.yml`](../.github/workflows/ci-release.yml) roda em Windows e Linux a cada *push* ou *pull request* nas branches `main`/`master` e a cada tag `v*`:
+
+1. compila a solução e roda os testes xUnit. No Linux, antes dos testes, sobe um OpenSSH local na porta 2222 com dois usuários de senha aleatória (um normal e um só-SFTP) e define `OMNISYNC_SFTP_*` com `OMNISYNC_SFTP_REQUIRED=1`, então os testes SFTP rodam de verdade;
+2. publica o executável único e roda o autoteste da interface fora da pasta de build (no Linux, com `xvfb-run`);
+3. testa o executável pela linha de comando: `--ajuda`, `--versao` (Linux), tarefa inexistente (código 3) e uma sincronização real (Windows), conferindo o código de saída e o arquivo copiado;
+4. só em *push* (não em *pull request*), guarda os artefatos `OmniSync-win-x64` e `OmniSync-linux-x64` por 3 dias.
+
+### Como lançar uma versão
+1. Atualize `<Version>` em [`OmniSync.csproj`](../OmniSync.csproj); é o número que aparece no cabeçalho, em `--versao` e na comparação do instalador.
+2. Registre as mudanças em [`CHANGELOG.md`](../CHANGELOG.md) e, se mudar o uso, no manual.
+3. Abra o *pull request*; com o CI verde, faça o merge na `main`.
+4. O executável oficial é o artefato do CI do *push* na `main` (baixe-o em até 3 dias). Para manter uma referência permanente, crie a tag `vX.Y.Z` no commit do merge.

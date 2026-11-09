@@ -111,22 +111,27 @@ jobs:
         timeout-minutes: 5
         run: |
           smoke/OmniSync --ajuda | grep -q sincronizar
+          smoke/OmniSync --versao | grep -Eq '^OmniSync [0-9]+\.[0-9]+\.[0-9]+'
           set +e
           smoke/OmniSync --sincronizar Inexistente
           code=$?
           set -e
           test "$code" -eq 3
 
+      # Artefatos só em push para main/tag (pull requests só compilam e testam), guardados por 3 dias
+      # para não esgotar a cota de armazenamento do Actions
       - name: Upload de artefato Windows
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: OmniSync-win-x64
           path: publish/win-x64/OmniSync.exe
+          retention-days: 3
 
       - name: Upload de artefato Linux
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: OmniSync-linux-x64
           path: publish/linux-x64/OmniSync
+          retention-days: 3

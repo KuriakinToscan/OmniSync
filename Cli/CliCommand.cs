@@ -16,7 +16,9 @@ public enum CliAction
     /// <summary>Só analisa a tarefa, sem alterar nada.</summary>
     Analyze,
     /// <summary>Analisa e sincroniza a tarefa.</summary>
-    Run
+    Run,
+    /// <summary>Mostra a versão do executável.</summary>
+    Version
 }
 
 /// <summary>
@@ -79,6 +81,7 @@ public sealed record CliCommand(
     private static readonly string[] ListTokens = { "--listar", "--list" };
     private static readonly string[] AnalyzeTokens = { "--analisar", "--analyze" };
     private static readonly string[] RunTokens = { "--sincronizar", "--run" };
+    private static readonly string[] VersionTokens = { "--versao", "--versão", "--version" };
 
     /// <summary>
     /// Indica se os argumentos pedem o modo de linha de comando (em vez de abrir a janela): qualquer argumento
@@ -116,6 +119,12 @@ public sealed record CliCommand(
             if (Matches(arg, HelpTokens))
             {
                 command = new CliCommand(CliAction.Help);
+                return true;
+            }
+
+            if (Matches(arg, VersionTokens))
+            {
+                command = new CliCommand(CliAction.Version);
                 return true;
             }
 
@@ -208,11 +217,13 @@ public sealed record CliCommand(
           OmniSync --listar
           OmniSync --analisar "Tarefa" [--relatorio arquivo.csv] [--detalhado]
           OmniSync --sincronizar "Tarefa" [--conflitos manter|origem-mais-nova] [--relatorio arquivo.csv] [--detalhado]
+          OmniSync --versao
 
         Comandos:
           --listar        Lista as tarefas salvas na interface.
           --analisar      Só analisa: mostra novos, conflitos e órfãos, sem alterar nada.
           --sincronizar   Analisa e sincroniza a tarefa.
+          --versao        Mostra a versão do OmniSync.
 
         Opções:
           --conflitos     manter (padrão): mantém o arquivo do destino em todo conflito.

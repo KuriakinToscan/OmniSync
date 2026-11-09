@@ -254,13 +254,6 @@ public static class PathHelper
     }
 
     /// <summary>
-    /// Move um arquivo local para dentro de uma pasta reservada. Equivale a
-    /// <see cref="MoveIntoReservedFolder(IFileSystem, string, string, string)"/> com <see cref="LocalFileSystem"/>.
-    /// </summary>
-    public static string? MoveIntoReservedFolder(string filePath, string reservedRoot, string relativePath)
-        => MoveIntoReservedFolder(LocalFileSystem.Instance, filePath, reservedRoot, relativePath);
-
-    /// <summary>
     /// Move um arquivo para dentro de uma pasta reservada (<c>lixo/</c> ou <c>old/</c>) preservando o caminho relativo.
     /// Nunca sobrescreve: se já houver homônimo, acrescenta sufixo de data/hora.
     /// </summary>
@@ -284,13 +277,6 @@ public static class PathHelper
         fs.MoveFile(filePath, safeTarget);
         return safeTarget;
     }
-
-    /// <summary>
-    /// Caminho local único para <paramref name="targetFilePath"/>. Equivale a
-    /// <see cref="GetUniqueTargetPath(IFileSystem, string)"/> com <see cref="LocalFileSystem"/>.
-    /// </summary>
-    public static string GetUniqueTargetPath(string targetFilePath)
-        => GetUniqueTargetPath(LocalFileSystem.Instance, targetFilePath);
 
     /// <summary>
     /// Gera um caminho de arquivo único acrescentando o sufixo <c>_yyyyMMdd_HHmmss</c> (e contador, se necessário)
@@ -317,13 +303,6 @@ public static class PathHelper
         }
         return candidate;
     }
-
-    /// <summary>
-    /// Remove pastas locais que ficaram vazias. Equivale a
-    /// <see cref="RemoveEmptyDirectories(IFileSystem, IEnumerable{string}, string, bool)"/> com <see cref="LocalFileSystem"/>.
-    /// </summary>
-    public static int RemoveEmptyDirectories(IEnumerable<string> startDirectories, string stopAt, bool includeStopAt = false)
-        => RemoveEmptyDirectories(LocalFileSystem.Instance, startDirectories, stopAt, includeStopAt);
 
     /// <summary>
     /// Remove, de baixo para cima, as pastas que ficaram vazias, sem nunca subir acima de <paramref name="stopAt"/>

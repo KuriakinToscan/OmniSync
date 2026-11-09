@@ -24,9 +24,6 @@ public partial class MainViewModel
     /// <summary>Chaves de servidor confirmadas (<c>servidor:porta</c> → SHA-256).</summary>
     public IReadOnlyDictionary<string, string> KnownHostKeys => _settings.KnownHostKeys;
 
-    /// <summary>Indica se a origem ou o destino da tarefa é remoto.</summary>
-    public bool IsRemoteTask => RemoteAddress.IsRemote(SourcePath) || RemoteAddress.IsRemote(DestinationPath);
-
     /// <summary>Liga as conexões remotas às configurações desta janela (favoritos e chaves confirmadas).</summary>
     private void InitializeRemote()
     {

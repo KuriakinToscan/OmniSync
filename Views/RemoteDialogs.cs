@@ -104,7 +104,7 @@ public sealed class PasswordDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         this[!BackgroundProperty] = this.GetResourceObservable("OsCardBrush").ToBinding();
 
-        var box = new TextBox { PasswordChar = '•', RevealPassword = false, Watermark = isPassphrase ? "Frase-senha" : "Senha" };
+        var box = new TextBox { PasswordChar = '•', RevealPassword = false, PlaceholderText = isPassphrase ? "Frase-senha" : "Senha" };
         var store = new CheckBox
         {
             Content = $"Guardar no {CredentialStore.Current.DisplayName}",
