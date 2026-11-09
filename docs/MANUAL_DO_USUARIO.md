@@ -109,7 +109,7 @@ sftp://usuario@servidor:2222/volume1/backup
   - Servidor que só aceita SFTP, sem comandos (comum com pastas isoladas por `chroot`), fica com a conferência pelo **tamanho**. O registro e o histórico dizem quantas cópias foram conferidas assim.
   - No favorito, **Conferir cada cópia relendo o arquivo pela rede** troca para releitura com SHA-256, ao custo de dobrar o tráfego.
 - **Queda do servidor:** uma queda curta reconecta sozinha e repete o arquivo. Se o servidor não voltar, a sincronização para: o arquivo em andamento falha, os demais ficam como **não executados** e o resultado aparece como interrompido. O que já foi copiado fica no destino, e a próxima execução continua daí.
-- **Desempenho (estimativa):** cada arquivo custa idas e voltas ao servidor. Pastas com dezenas de milhares de arquivos pequenos ficam bem mais lentas que no disco local.
+- **Desempenho:** o envio não espera a confirmação de cada pedaço, então arquivos grandes chegam perto da velocidade do link mesmo numa VPN com latência alta. Cada arquivo ainda custa um número fixo de idas e voltas ao servidor (criar, gravar, conferir, data, renomear); para diluir esse custo, o OmniSync copia até 4 arquivos novos ao mesmo tempo no destino SFTP. Mesmo assim, pastas com dezenas de milhares de arquivos pequenos ficam bem mais lentas que no disco local ou na rede do escritório (estimativa).
 - **Agendamento:** a execução agendada usa a senha do cofre e a chave já confirmada, sem perguntar nada. Se faltar uma delas, ela para com o código 7 e avisa. Abra o OmniSync e analise a tarefa uma vez para resolver.
 
 ---

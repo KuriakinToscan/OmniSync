@@ -41,6 +41,9 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
     private readonly object _shellGate = new();
     private SshClient? _shell;
     private ServerHashTool? _hashTool;
+    private readonly HashSet<string> _knownDirectories = new(StringComparer.Ordinal);
+    private volatile bool _reconnectRequested;
+    private int _generation;
 
     /// <summary>Tempo máximo para o servidor calcular o SHA-256 de um arquivo.</summary>
     public static TimeSpan ServerHashTimeout { get; set; } = TimeSpan.FromHours(1);
@@ -84,13 +87,26 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
     /// <exception cref="RemoteAccessException">O servidor não respondeu ou recusou o acesso ao reconectar.</exception>
     public void EnsureConnected()
     {
-        if (_client.IsConnected) return;
+        if (_client.IsConnected && !_reconnectRequested) return;
         lock (_connectGate)
         {
+            if (_reconnectRequested)
+            {
+                _reconnectRequested = false;
+                try
+                {
+                    if (_client.IsConnected) _client.Disconnect();
+                }
+                catch (Exception)
+                {
+                    // A sessão já estava desfeita: o importante é abrir uma nova
+                }
+            }
             if (_client.IsConnected) return;
             try
             {
                 _client.Connect();
+                Interlocked.Increment(ref _generation);
             }
             catch (SshAuthenticationException ex)
             {
@@ -131,33 +147,40 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
         var tool = DetectHashTool();
         if (tool == ServerHashTool.None) return null;
         var command = BuildHashCommand(tool, Remote(path));
-        lock (_shellGate)
+        SshClient? shell = null;
+        try
         {
-            try
+            // Só a abertura do canal é exclusiva: os comandos rodam em canais separados da mesma conexão, então
+            // cópias simultâneas conferem ao mesmo tempo, sem esperar umas pelas outras
+            lock (_shellGate)
             {
-                var shell = OpenShell();
-                if (shell == null) return null;
-                using var cmd = shell.CreateCommand(command);
-                cmd.CommandTimeout = ServerHashTimeout;
-                cmd.Execute();
-                var hash = cmd.ExitStatus == 0 ? ParseHash(cmd.Result) : null;
-                if (hash == null)
-                {
-                    // O comando existe mas não achou o arquivo: o caminho no shell difere do SFTP (ex.: NAS que
-                    // mostra /pasta no SFTP e /volume1/pasta no shell). Daqui em diante, só tamanho nesta conexão.
-                    _hashTool = ServerHashTool.None;
-                    FileLogService.Write($"[AVISO] {_endpoint.HostPortKey}: o servidor não calculou o SHA-256 de {path} " +
-                                         $"(saída {cmd.ExitStatus}: {Trim(cmd.Error)}). As cópias desta conexão serão conferidas pelo tamanho.");
-                }
-                return hash;
+                shell = OpenShell();
             }
-            catch (Exception ex) when (ex is SshException or SocketException or IOException or TimeoutException or ProxyException or ObjectDisposedException)
+            if (shell == null) return null;
+            using var cmd = shell.CreateCommand(command);
+            cmd.CommandTimeout = ServerHashTimeout;
+            cmd.Execute();
+            var hash = cmd.ExitStatus == 0 ? ParseHash(cmd.Result) : null;
+            if (hash == null)
             {
-                // Sem canal de comandos agora: esta cópia é conferida pelo tamanho; a próxima tenta de novo
-                CloseShell();
-                FileLogService.Write($"[AVISO] {_endpoint.HostPortKey}: canal de comandos indisponível ({ex.Message}); conferência pelo tamanho.");
-                return null;
+                // O comando existe mas não achou o arquivo: o caminho no shell difere do SFTP (ex.: NAS que
+                // mostra /pasta no SFTP e /volume1/pasta no shell). Daqui em diante, só tamanho nesta conexão.
+                _hashTool = ServerHashTool.None;
+                FileLogService.Write($"[AVISO] {_endpoint.HostPortKey}: o servidor não calculou o SHA-256 de {path} " +
+                                     $"(saída {cmd.ExitStatus}: {Trim(cmd.Error)}). As cópias desta conexão serão conferidas pelo tamanho.");
             }
+            return hash;
+        }
+        catch (Exception ex) when (ex is SshException or SocketException or IOException or TimeoutException or ProxyException or ObjectDisposedException)
+        {
+            // Sem canal de comandos agora: esta cópia é conferida pelo tamanho; a próxima tenta de novo
+            lock (_shellGate)
+            {
+                // Outra cópia pode já ter reaberto o canal: só fecha se ainda for o que falhou
+                if (ReferenceEquals(_shell, shell)) CloseShell();
+            }
+            FileLogService.Write($"[AVISO] {_endpoint.HostPortKey}: canal de comandos indisponível ({ex.Message}); conferência pelo tamanho.");
+            return null;
         }
     }
 
@@ -361,10 +384,19 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
     public bool Exists(string path) => TryGetAttributes(Remote(path)) != null;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// As pastas confirmadas ficam memorizadas até <see cref="ForgetCachedState"/>: no SFTP, conferir cada nível custa
+    /// duas idas e voltas (o SSH.NET resolve o caminho antes de cada operação), o que, numa VPN, passava de 1 s por
+    /// arquivo copiado só para confirmar pastas que já existiam.
+    /// </remarks>
     public void CreateDirectory(string path)
     {
         var remote = Remote(path);
         if (remote == "/") return;
+        lock (_knownDirectories)
+        {
+            if (_knownDirectories.Contains(remote)) return;
+        }
         Run(() =>
         {
             // Cria cada nível que faltar, de cima para baixo
@@ -388,9 +420,22 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
                 {
                     throw new IOException($"Já existe um arquivo com o nome da pasta: {Full(current)}");
                 }
+                lock (_knownDirectories)
+                {
+                    _knownDirectories.Add(current);
+                }
             }
             return true;
         }, path, isDirectory: true);
+    }
+
+    /// <inheritdoc />
+    public void ForgetCachedState()
+    {
+        lock (_knownDirectories)
+        {
+            _knownDirectories.Clear();
+        }
     }
 
     /// <inheritdoc />
@@ -456,8 +501,19 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
     public Stream CreateNew(string path, long expectedLength, bool readBack)
     {
         var remote = Remote(path);
+        if (!readBack)
+        {
+            // Envio sem esperar a confirmação de cada pedaço (ver SftpUploadStream): é o que torna a gravação
+            // rápida num link com latência alta, como a VPN
+            return Run<Stream>(() =>
+            {
+                int generation = Generation;
+                return new SftpUploadStream(_client, remote, path, ex => NoteFailure(ex, generation));
+            }, path, isDirectory: false);
+        }
+        // Releitura pedida pelo favorito: o fluxo do SSH.NET, que também lê pelo mesmo handle
         return Run<Stream>(
-            () => new TranslatingStream(_client.Open(remote, FileMode.CreateNew, readBack ? FileAccess.ReadWrite : FileAccess.Write), path),
+            () => new TranslatingStream(_client.Open(remote, FileMode.CreateNew, FileAccess.ReadWrite), path),
             path,
             isDirectory: false);
     }
@@ -510,6 +566,10 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
     public void DeleteEmptyDirectory(string path)
     {
         var remote = Remote(path);
+        lock (_knownDirectories)
+        {
+            _knownDirectories.RemoveWhere(d => d == remote || d.StartsWith(remote + "/", StringComparison.Ordinal));
+        }
         Run(() =>
         {
             _client.DeleteDirectory(remote);
@@ -553,24 +613,49 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
     /// </summary>
     private T Run<T>(Func<T> operation, string displayPath, bool isDirectory, bool retryOnDrop = false)
     {
+        int generation = 0;
         try
         {
             EnsureConnected();
+            generation = Generation;
             try
             {
                 return operation();
             }
             catch (Exception ex) when (retryOnDrop && IsConnectionDrop(ex))
             {
+                NoteFailure(ex, generation);
                 EnsureConnected();
+                generation = Generation;
                 return operation();
             }
         }
         catch (Exception ex) when (Translate(ex, displayPath, isDirectory) is { } translated)
         {
+            NoteFailure(ex, generation);
             throw translated;
         }
     }
+
+    /// <summary>
+    /// Depois de uma queda, garante que a próxima operação abra uma conexão nova. O SSH.NET às vezes continua
+    /// dizendo que está conectado com a sessão já desfeita por baixo (falhas como "objeto descartado"); sem isso, as
+    /// novas tentativas do motor repetiriam a mesma falha em vez de reconectar.
+    /// </summary>
+    /// <remarks>
+    /// Só marca: a desconexão em si fica para <see cref="EnsureConnected"/>, na thread de quem vai operar. Esta
+    /// função pode ser chamada na thread de recepção do próprio SSH.NET (fim de um envio), e desconectar ali travaria.
+    /// </remarks>
+    /// <param name="ex">Falha.</param>
+    /// <param name="generation">Conexão em que a operação começou (<see cref="Generation"/>): falha de uma conexão
+    /// antiga, que já foi trocada, não derruba a nova.</param>
+    internal void NoteFailure(Exception ex, int generation)
+    {
+        if (IsConnectionDrop(ex) && generation == Volatile.Read(ref _generation)) _reconnectRequested = true;
+    }
+
+    /// <summary>Número da conexão atual (aumenta a cada reconexão).</summary>
+    internal int Generation => Volatile.Read(ref _generation);
 
     /// <summary>
     /// Converte uma falha do SSH.NET para a exceção equivalente do System.IO; <c>null</c> deixa a original passar.
@@ -591,7 +676,9 @@ public sealed class SftpFileSystem : IFileSystem, IDisposable
         };
     }
 
-    private static bool IsConnectionDrop(Exception ex) => ex is SshConnectionException or SocketException or ObjectDisposedException;
+    private static bool IsConnectionDrop(Exception ex) =>
+        ex is SshConnectionException or SocketException or ObjectDisposedException or SshOperationTimeoutException ||
+        (ex.InnerException is { } inner && IsConnectionDrop(inner));
 
     /// <summary>Fecha a conexão.</summary>
     public void Dispose()
