@@ -1384,6 +1384,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSync))]
     private async Task StartSyncAsync()
     {
+        FileLogService.Write("[DIAG] Comando Revisar e sincronizar EXECUTADO.");
         if (!Items.Any()) return;
 
         var summary = BuildPlanSummary();

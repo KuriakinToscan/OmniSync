@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         // Ao voltar para a janela, traz as execuções feitas pelo agendador enquanto ela estava em segundo plano
         Activated += (_, _) => (DataContext as MainViewModel)?.RefreshRunsFromHistory();
+        ClickDiagnostics.Attach(this);
 
         // Enter confirma: nos caminhos, expande %USERPROFILE%; no horário, normaliza e salva o agendamento
         SourcePathBox.AddHandler(KeyDownEvent, OnPathBoxKeyDown, RoutingStrategies.Tunnel);
