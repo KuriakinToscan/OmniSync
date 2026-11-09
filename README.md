@@ -56,6 +56,18 @@ Conflitos sem decisão mantêm o destino (ou, com `--conflitos origem-mais-nova`
 - 🛠️ **[Documentação Técnica e de Desenvolvimento](docs/DOCUMENTACAO_TECNICA.md)** — Arquitetura MVVM, funcionamento interno do `SyncEngine`, SFTP, agendamento, testes (inclusive SFTP), CI e como lançar uma versão.
 - 📑 **[Referência](docs/REFERENCIA.md)** — Pasta de dados, formato do `settings.json`, histórico, log, relatório CSV e linha de comando.
 - 📝 **[Histórico de versões](CHANGELOG.md)** — O que mudou em cada versão.
+- ⚖️ **[Componentes de terceiros](THIRD-PARTY-NOTICES.md)** — Bibliotecas embutidas no executável e as suas licenças.
+- 🔒 **[Segurança](SECURITY.md)** — Como relatar uma falha e conferir o executável baixado.
+
+---
+
+## 📥 Baixar
+
+Baixe a versão mais recente na página de **[Releases](https://github.com/KuriakinToscan/OmniSync/releases/latest)**: `OmniSync-X.Y.Z-win-x64.exe` (Windows 10 ou mais novo, 64 bits) ou `OmniSync-X.Y.Z-linux-x64` (Linux 64 bits). É um arquivo único, sem dependências; ao abrir, o OmniSync oferece instalar-se na pasta do usuário, sem administrador.
+
+- **Conferência:** compare o SHA-256 do arquivo com o `SHA256SUMS.txt` da release (`Get-FileHash` no PowerShell, `sha256sum` no Linux).
+- **Aviso do Windows:** o executável ainda não tem assinatura digital, então o SmartScreen pode mostrar "O Windows protegeu o computador". Se o arquivo veio da página de releases e o SHA-256 confere, clique em **Mais informações** › **Executar assim mesmo**.
+- **Linux:** dê permissão de execução antes (`chmod +x OmniSync-X.Y.Z-linux-x64`).
 
 ---
 

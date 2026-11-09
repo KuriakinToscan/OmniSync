@@ -6,7 +6,8 @@ Mudanças visíveis de cada versão, da mais nova para a mais antiga. Datas = me
 - Versão exibida no cabeçalho (ex.: `v2.0.2`) e novo comando `--versao`.
 - Conexões SFTP são fechadas ao fechar a janela e ao fim da linha de comando (o servidor vê encerramento normal, não queda).
 - Limpeza de código sem uso e correção dos avisos de compilação (API obsoleta do Avalonia 12).
-- CI: artefatos só em push para a `main`, guardados por 3 dias.
+- CI: release automática no GitHub a cada tag `vX.Y.Z`, com os executáveis de Windows e Linux e o `SHA256SUMS.txt`; push na `main` só compila e testa.
+- Repositório preparado para ser público: seção **Baixar** no README e no manual, [componentes de terceiros](THIRD-PARTY-NOTICES.md) e [política de segurança](SECURITY.md).
 - Documentação: Adiar no manual, decisões guardadas, Voltar ao plano, dica de VPN, nova [Referência](docs/REFERENCIA.md) e este histórico.
 
 ## 2.0.1 — 2026-11-08
