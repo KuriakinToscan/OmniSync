@@ -188,6 +188,15 @@ jobs:
           cp artefatos/OmniSync-win-x64/OmniSync.exe "release/OmniSync-${VERSAO}-win-x64.exe"
           cp artefatos/OmniSync-linux-x64/OmniSync "release/OmniSync-${VERSAO}-linux-x64"
           chmod +x "release/OmniSync-${VERSAO}-linux-x64"
+          # Licença e avisos de terceiros num arquivo só, junto com os executáveis
+          cp LICENSE release/LICENSE.txt
+          {
+            cat THIRD-PARTY-NOTICES.md
+            for f in licenses/*.txt; do
+              printf '\n\n================================================================================\n%s\n================================================================================\n\n' "$(basename "$f")"
+              cat "$f"
+            done
+          } > release/THIRD-PARTY-NOTICES.txt
           (cd release && sha256sum -- * > SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
           printf '\n---\nConferência no Windows (PowerShell): `Get-FileHash .\\OmniSync-%s-win-x64.exe` e compare com `SHA256SUMS.txt`.\n' "${VERSAO}" >> notas.md

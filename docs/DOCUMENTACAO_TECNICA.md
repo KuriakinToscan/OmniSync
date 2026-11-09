@@ -320,11 +320,11 @@ O arquivo [`.github/workflows/ci-release.yml`](../.github/workflows/ci-release.y
 2. publica o executável único e roda o autoteste da interface fora da pasta de build (no Linux, com `xvfb-run`);
 3. testa o executável pela linha de comando: `--ajuda`, `--versao` (Linux), tarefa inexistente (código 3) e uma sincronização real (Windows), conferindo o código de saída e o arquivo copiado;
 4. guarda os artefatos `OmniSync-win-x64` e `OmniSync-linux-x64` só no disparo manual (3 dias, para teste) e na tag (1 dia, para o passo seguinte). *Push* na `main` e *pull request* só compilam e testam, para não esgotar a cota de armazenamento do Actions do repositório privado;
-5. na tag `vX.Y.Z`, depois de Windows e Linux verdes, o job `release` confere que a tag é igual a `<Version>` do `OmniSync.csproj`, tira as notas da seção `## X.Y.Z — data` do `CHANGELOG.md` e publica a release do GitHub com `OmniSync-X.Y.Z-win-x64.exe`, `OmniSync-X.Y.Z-linux-x64` e `SHA256SUMS.txt`. Os arquivos da release são permanentes e não contam na cota de artefatos.
+5. na tag `vX.Y.Z`, depois de Windows e Linux verdes, o job `release` confere que a tag é igual a `<Version>` do `OmniSync.csproj`, tira as notas da seção `## X.Y.Z — data` do `CHANGELOG.md` e publica a release do GitHub com `OmniSync-X.Y.Z-win-x64.exe`, `OmniSync-X.Y.Z-linux-x64`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` (o [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) mais os textos de `licenses/`) e `SHA256SUMS.txt`. Os arquivos da release são permanentes e não contam na cota de artefatos.
 
 ### Como lançar uma versão
 1. Atualize `<Version>` em [`OmniSync.csproj`](../OmniSync.csproj); é o número que aparece no cabeçalho, em `--versao` e na comparação do instalador.
-2. Registre as mudanças em [`CHANGELOG.md`](../CHANGELOG.md) e, se mudar o uso, no manual.
+2. Registre as mudanças em [`CHANGELOG.md`](../CHANGELOG.md) e, se mudar o uso, no manual. Se um pacote NuGet entrou, saiu ou mudou de versão, atualize o [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) (`dotnet list OmniSync.csproj package --include-transitive`).
 3. Abra o *pull request*; com o CI verde, faça o merge na `main`.
 4. Crie e envie a tag no commit do merge: `git checkout main && git pull && git tag vX.Y.Z && git push origin vX.Y.Z`. Não crie a release à mão pela página do GitHub: o job `release` falharia por ela já existir. O CI recompila, testa e publica a release sozinho; se a tag não bater com `<Version>` ou faltar a seção no CHANGELOG, o job `release` falha e nada é publicado.
 5. Baixe o `.exe` da release e confira com `Get-FileHash` (PowerShell) contra o `SHA256SUMS.txt`. Esse é o executável oficial.

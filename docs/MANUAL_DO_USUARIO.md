@@ -188,7 +188,7 @@ Ative **Tolerar 1 h (horário de verão)**. Mídias FAT/exFAT gravam hora local 
 A versão aparece no cabeçalho, ao lado do nome OmniSync (ex.: `v2.0.2`). Pelo terminal: `OmniSync.exe --versao | Out-Host`.
 
 **6. O Windows mostra "O Windows protegeu o computador" ao abrir o executável.**
-É o SmartScreen: o executável ainda não é assinado digitalmente, e o aviso aparece em arquivos baixados sem assinatura. Se o arquivo veio do repositório oficial ou de quem mantém o OmniSync, clique em **Mais informações** › **Executar assim mesmo**. A assinatura do executável está em estudo.
+É o SmartScreen: o executável ainda não é assinado digitalmente, e o aviso aparece em arquivos baixados sem assinatura. Se o arquivo veio da [página de releases](https://github.com/KuriakinToscan/OmniSync/releases/latest) e o SHA-256 confere com o `SHA256SUMS.txt` (seção 10), clique em **Mais informações** › **Executar assim mesmo**. A assinatura do executável está em estudo.
 
 ---
 
@@ -241,6 +241,9 @@ A opção `--agendado` é usada pelo agendamento (seção 10): marca a execuçã
 ---
 
 ## 10. Instalação e Agendamento
+
+### Onde baixar
+A versão oficial fica na página de **[Releases](https://github.com/KuriakinToscan/OmniSync/releases/latest)** do repositório: `OmniSync-X.Y.Z-win-x64.exe` para Windows e `OmniSync-X.Y.Z-linux-x64` para Linux. Para conferir o arquivo, compare o resultado de `Get-FileHash .\OmniSync-X.Y.Z-win-x64.exe` (PowerShell) com a linha correspondente do `SHA256SUMS.txt` da mesma release. No Linux, rode `chmod +x` no arquivo antes de abrir.
 
 ### Instalação na pasta fixa
 O OmniSync é um executável único, sem instalador. Quando é aberto fora da pasta fixa do usuário (`%LOCALAPPDATA%\Programs\OmniSync` no Windows, `~/.local/share/Programs/OmniSync` no Linux), ele oferece copiar-se para lá e criar os atalhos na **área de trabalho** e no **menu Iniciar** (no Linux, no menu de aplicativos). Não precisa de administrador.
