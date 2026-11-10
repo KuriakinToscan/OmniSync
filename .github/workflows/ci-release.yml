@@ -200,6 +200,7 @@ jobs:
           (cd release && sha256sum -- * > SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
           printf '\n---\nConferência no Windows (PowerShell): `Get-FileHash .\\OmniSync-%s-win-x64.exe` e compare com `SHA256SUMS.txt`.\n' "${VERSAO}" >> notas.md
+          printf '\n[Política de assinatura de código e privacidade](https://github.com/%s/blob/main/CODE_SIGNING_POLICY.md) · [Desinstalar](https://github.com/%s/blob/main/docs/MANUAL_DO_USUARIO.md#11-desinstalar)\n' "${GITHUB_REPOSITORY}" "${GITHUB_REPOSITORY}" >> notas.md
 
       - name: Publicar a release
         env:

@@ -15,6 +15,7 @@ Manual do **OmniSync**, sincronizador visual de arquivos para **Windows e Linux*
 8. [Perguntas Frequentes e Solução de Problemas](#8-perguntas-frequentes-e-solução-de-problemas)
 9. [Linha de Comando (sem janela)](#9-linha-de-comando-sem-janela)
 10. [Instalação e Agendamento](#10-instalação-e-agendamento)
+11. [Desinstalar](#11-desinstalar)
 
 ---
 
@@ -279,3 +280,52 @@ Avisos de problema e avisos com **Adiar** ficam na tela até você escolher ou f
 O cartão mostra a próxima execução, a última execução agendada e as 5 execuções mais recentes (manuais e agendadas). O histórico guarda as 30 últimas por tarefa.
 
 Ao abrir, o OmniSync confere cada agendamento ligado. Se o executável registrado foi apagado ou a entrada foi removida do Agendador de Tarefas, ele avisa e oferece **Corrigir** (registrar de novo apontando para a versão instalada). Excluir uma tarefa remove também o seu agendamento e o histórico.
+
+---
+
+## 11. Desinstalar
+
+O OmniSync não aparece em **Aplicativos instalados** do Windows, porque não usa instalador. Para removê-lo, siga os passos abaixo. Nenhum deles toca nas pastas de origem e de destino nem nas pastas `lixo/` e `old/`: os seus arquivos continuam onde estão.
+
+### 1. Desligar os agendamentos (com o OmniSync aberto)
+Em cada tarefa com ícone de relógio, desligue o agendamento no cartão **Agendamento**, ou exclua a tarefa. Isso remove a entrada do Agendador de Tarefas (Windows) ou o timer do systemd (Linux), inclusive um **Adiar** pendente. Depois feche o OmniSync.
+
+### 2. Windows
+No PowerShell (não precisa de administrador):
+
+```powershell
+# Agendamentos que tenham sobrado (pasta OmniSync do Agendador de Tarefas)
+Get-ScheduledTask -TaskPath '\OmniSync\' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
+
+# Programa e atalhos
+Remove-Item "$env:LOCALAPPDATA\Programs\OmniSync" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$([Environment]::GetFolderPath('Desktop'))\OmniSync.lnk" -ErrorAction SilentlyContinue
+Remove-Item "$([Environment]::GetFolderPath('Programs'))\OmniSync.lnk" -ErrorAction SilentlyContinue
+
+# Opcional: tarefas, favoritos, histórico e logs
+Remove-Item "$env:LOCALAPPDATA\OmniSync" -Recurse -Force -ErrorAction SilentlyContinue
+```
+
+**Senhas dos servidores SFTP:** abra **Gerenciador de Credenciais** › **Credenciais do Windows** › **Credenciais genéricas** e remova as entradas que começam com `OmniSync:sftp:`.
+
+### 3. Linux
+```bash
+# Agendamentos que tenham sobrado
+for t in ~/.config/systemd/user/omnisync-*.timer; do
+  [ -e "$t" ] && systemctl --user disable --now "$(basename "$t")"
+done
+rm -f ~/.config/systemd/user/omnisync-*.timer ~/.config/systemd/user/omnisync-*.service
+systemctl --user daemon-reload
+
+# Programa e atalhos
+rm -rf ~/.local/share/Programs/OmniSync
+rm -f ~/.local/share/applications/omnisync.desktop "$(xdg-user-dir DESKTOP 2>/dev/null || echo ~/Desktop)/omnisync.desktop"
+
+# Opcional: tarefas, favoritos, histórico e logs
+rm -rf ~/.local/share/OmniSync
+
+# Senhas dos servidores SFTP guardadas no chaveiro
+secret-tool clear service omnisync
+```
+
+O executável baixado (por exemplo, na pasta Downloads) pode ser apagado normalmente.

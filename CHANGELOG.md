@@ -2,6 +2,9 @@
 
 Mudanças visíveis de cada versão, da mais nova para a mais antiga. Datas = merge na `main` (ou do último commit, para versão ainda em revisão). Detalhes técnicos na [Documentação Técnica](docs/DOCUMENTACAO_TECNICA.md).
 
+## Próxima versão
+- Documentação: [política de assinatura de código](CODE_SIGNING_POLICY.md) e seção **Desinstalar** no manual; links nas notas de cada release.
+
 ## 2.0.2 — 2026-11-08
 - Versão exibida no cabeçalho (ex.: `v2.0.2`) e novo comando `--versao`.
 - Conexões SFTP são fechadas ao fechar a janela e ao fim da linha de comando (o servidor vê encerramento normal, não queda).

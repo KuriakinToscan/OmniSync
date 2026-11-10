@@ -58,6 +58,7 @@ Conflitos sem decisão mantêm o destino (ou, com `--conflitos origem-mais-nova`
 - 📝 **[Histórico de versões](CHANGELOG.md)** — O que mudou em cada versão.
 - ⚖️ **[Componentes de terceiros](THIRD-PARTY-NOTICES.md)** — Bibliotecas embutidas no executável e as suas licenças.
 - 🔒 **[Segurança](SECURITY.md)** — Como relatar uma falha e conferir o executável baixado.
+- ✍️ **[Política de assinatura de código](CODE_SIGNING_POLICY.md)** — O que é assinado, por quem, e privacidade.
 
 ---
 
@@ -68,6 +69,8 @@ Baixe a versão mais recente na página de **[Releases](https://github.com/Kuria
 - **Conferência:** compare o SHA-256 do arquivo com o `SHA256SUMS.txt` da release (`Get-FileHash` no PowerShell, `sha256sum` no Linux).
 - **Aviso do Windows:** o executável ainda não tem assinatura digital, então o SmartScreen pode mostrar "O Windows protegeu o computador". Se o arquivo veio da página de releases e o SHA-256 confere, clique em **Mais informações** › **Executar assim mesmo**.
 - **Linux:** dê permissão de execução antes (`chmod +x OmniSync-X.Y.Z-linux-x64`).
+- **Desinstalar:** veja a [seção 11 do manual](docs/MANUAL_DO_USUARIO.md#11-desinstalar).
+- **Assinatura e privacidade:** veja a [Política de assinatura de código](CODE_SIGNING_POLICY.md). O OmniSync não tem telemetria e só se conecta aos servidores que você cadastra.
 
 ---
 
